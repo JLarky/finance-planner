@@ -1,0 +1,7 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "dev": "pnpm dev",
+    "build": "pnpm build"
+  }
+}

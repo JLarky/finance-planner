@@ -1,0 +1,34 @@
+{
+  "name": "finance-planner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview",
+    "start": "node .output/server/index.mjs",
+    "test": "NODE_ENV=test node --import remix/node-tsx --test",
+    "check": "vp check",
+    "typecheck": "tsc --noEmit",
+    "prepare": "vp config"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.2",
+    "remix": "^3.0.0-beta.5"
+  },
+  "devDependencies": {
+    "@jlarky/gha-ts": "npm:@jsr/jlarky__gha-ts@^0.2.2",
+    "@types/node": "latest",
+    "nitro": "3.0.260610-beta",
+    "typescript": "latest",
+    "vite": "catalog:",
+    "vite-plugin-remix3": "latest",
+    "vite-plus": "catalog:",
+    "yaml": "^2.9.0"
+  },
+  "engines": {
+    "node": ">=24.3.0"
+  },
+  "packageManager": "pnpm@10.34.1"
+}
