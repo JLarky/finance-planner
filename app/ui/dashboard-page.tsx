@@ -2,6 +2,7 @@ import type { Handle } from "remix/ui";
 import { css } from "remix/ui";
 import type { User } from "../data/users.ts";
 import {
+  accountLabel,
   money,
   portfolioTotal,
   summarizePortfolio,
@@ -17,6 +18,9 @@ export function DashboardPage(h: Handle<{ user: User; plan?: RebalancePlan }>) {
   const total = portfolioTotal(portfolio);
   const cash = portfolio.accounts.reduce((sum, account) => sum + account.cash, 0);
   const validTargets = Math.abs(targetTotal(portfolio) - 100) < 0.001;
+  const hasAccounts = portfolio.accounts.length > 0;
+  const hasHoldings = portfolio.holdings.length > 0;
+  const canRebalance = validTargets && hasAccounts && hasHoldings;
   const accountName = new Map(portfolio.accounts.map((account) => [account.id, account.name]));
   return () => (
     <Document title="Your plan · Finance Planner">
@@ -38,6 +42,12 @@ export function DashboardPage(h: Handle<{ user: User; plan?: RebalancePlan }>) {
             Enter your accounts and holdings, choose target exposures, then compare the current
             portfolio with a practical next step.
           </p>
+          <div mix={progressGrid}>
+            <ProgressStep number="1" label="Accounts" complete={hasAccounts} />
+            <ProgressStep number="2" label="Holdings" complete={hasHoldings} />
+            <ProgressStep number="3" label="Targets" complete={validTargets} />
+            <ProgressStep number="4" label="Plan" complete={canRebalance} />
+          </div>
           <div mix={metricGrid}>
             <Metric label="Portfolio value" value={money(total)} />
             <Metric label="Uninvested cash" value={money(cash)} />
@@ -57,46 +67,56 @@ export function DashboardPage(h: Handle<{ user: User; plan?: RebalancePlan }>) {
               </div>
               <form method="POST" action="/app">
                 <input type="hidden" name="intent" value="rebalance" />
-                <button mix={button({})}>Rebalance with cash</button>
+                <button mix={button({})} disabled={!canRebalance}>
+                  {canRebalance ? "Rebalance with cash" : "Finish setup to rebalance"}
+                </button>
               </form>
             </div>
             {!validTargets ? (
               <p mix={warning}>Targets must total 100% before a plan can be considered complete.</p>
             ) : null}
-            <div mix={tableScroll}>
-              <table mix={table}>
-                <thead>
-                  <tr>
-                    <th>Exposure</th>
-                    <th>Current</th>
-                    <th>Target</th>
-                    <th>Value</th>
-                    <th>Drift</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summaries.map((summary) => (
-                    <tr key={summary.id}>
-                      <td>{summary.name}</td>
-                      <td>{summary.currentPercent.toFixed(1)}%</td>
-                      <td>{summary.targetPercent.toFixed(1)}%</td>
-                      <td>{money(summary.currentValue)}</td>
-                      <td>
-                        {summary.dollarDrift >= 0 ? "+" : "−"}
-                        {money(Math.abs(summary.dollarDrift))}
-                      </td>
-                      <td>
-                        <span mix={statusStyle(summary.status)}>
-                          {summary.status.replace("-", " ")}
-                        </span>
-                      </td>
+            {!hasHoldings ? (
+              <EmptyState
+                title="Your allocation will appear here"
+                detail="Add an account and at least one holding below to see current versus target."
+              />
+            ) : (
+              <div mix={tableScroll}>
+                <table mix={table}>
+                  <thead>
+                    <tr>
+                      <th>Exposure</th>
+                      <th>Current</th>
+                      <th>Target</th>
+                      <th>Value</th>
+                      <th>Drift</th>
+                      <th>Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {summaries.map((summary) => (
+                      <tr key={summary.id}>
+                        <td>{summary.name}</td>
+                        <td>{summary.currentPercent.toFixed(1)}%</td>
+                        <td>{summary.targetPercent.toFixed(1)}%</td>
+                        <td>{money(summary.currentValue)}</td>
+                        <td>
+                          {summary.dollarDrift >= 0 ? "+" : "−"}
+                          {money(Math.abs(summary.dollarDrift))}
+                        </td>
+                        <td>
+                          <span mix={statusStyle(summary.status)}>
+                            {summary.status.replace("-", " ")}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
+          <AccountSummary accounts={portfolio.accounts} holdings={portfolio.holdings} />
           <div mix={twoColumns}>
             <AccountForm />
             <HoldingForm accounts={portfolio.accounts} exposures={portfolio.exposures} />
@@ -121,6 +141,71 @@ function Metric(h: Handle<{ label: string; value: string; tone?: "normal" | "war
         {h.props.value}
       </strong>
     </article>
+  );
+}
+
+function ProgressStep(h: Handle<{ number: string; label: string; complete: boolean }>) {
+  return () => (
+    <div mix={[progressStep, css({ opacity: h.props.complete ? 1 : 0.65 })]}>
+      <span mix={progressNumber}>{h.props.complete ? "✓" : h.props.number}</span>
+      <span>{h.props.label}</span>
+    </div>
+  );
+}
+
+function EmptyState(h: Handle<{ title: string; detail: string }>) {
+  return () => (
+    <div mix={emptyState}>
+      <strong>{h.props.title}</strong>
+      <p mix={css(muted)}>{h.props.detail}</p>
+    </div>
+  );
+}
+
+function AccountSummary(
+  h: Handle<{ accounts: User["portfolio"]["accounts"]; holdings: User["portfolio"]["holdings"] }>,
+) {
+  return () => (
+    <section mix={panel}>
+      <div mix={sectionHeader}>
+        <div>
+          <p mix={eyebrow}>Your accounts</p>
+          <h2 mix={heading}>Where your plan lives</h2>
+        </div>
+        <span mix={css(muted)}>
+          {h.props.accounts.length} account{h.props.accounts.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      {h.props.accounts.length === 0 ? (
+        <EmptyState
+          title="Start with an account"
+          detail="Use the form below to add a container for cash and holdings."
+        />
+      ) : (
+        <div mix={accountList}>
+          {h.props.accounts.map((account) => (
+            <article key={account.id} mix={accountCard}>
+              <div>
+                <strong>{account.name}</strong>
+                <p mix={css(muted)}>
+                  {accountLabel(account.type)} ·{" "}
+                  {h.props.holdings.filter((holding) => holding.accountId === account.id).length}{" "}
+                  holding
+                  {h.props.holdings.filter((holding) => holding.accountId === account.id).length ===
+                  1
+                    ? ""
+                    : "s"}
+                </p>
+              </div>
+              <strong>
+                {money(account.cash)}{" "}
+                <span mix={css({ color: "#a5b9ad", fontSize: "12px", fontWeight: 400 })}>cash</span>
+              </strong>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -340,6 +425,37 @@ const metricGrid = css({
   gap: "12px",
   marginTop: "32px",
 });
+const progressGrid = css({
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "8px",
+  marginTop: "28px",
+  maxWidth: "700px",
+  "@media (max-width: 620px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" },
+});
+const progressStep = css({
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  padding: "10px 12px",
+  border: "1px solid #315244",
+  borderRadius: "12px",
+  background: "#183127",
+  color: "#d4e1d8",
+  fontSize: "13px",
+  fontWeight: 650,
+});
+const progressNumber = css({
+  display: "grid",
+  placeItems: "center",
+  width: "22px",
+  height: "22px",
+  borderRadius: "50%",
+  background: "#b8e986",
+  color: "#10251d",
+  fontSize: "12px",
+  fontWeight: 800,
+});
 const metric = css({
   border: "1px solid #315244",
   borderRadius: "14px",
@@ -353,6 +469,29 @@ const twoColumns = css({
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
   gap: "0 20px",
+  alignItems: "start",
+});
+const emptyState = css({
+  display: "grid",
+  justifyItems: "start",
+  gap: "4px",
+  padding: "28px 18px",
+  border: "1px dashed #527061",
+  borderRadius: "12px",
+  background: "#10251d",
+  "& p": { margin: 0 },
+});
+const accountList = css({ display: "grid", gap: "10px" });
+const accountCard = css({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "16px",
+  padding: "16px",
+  border: "1px solid #315244",
+  borderRadius: "12px",
+  background: "#10251d",
+  "& p": { margin: "4px 0 0" },
 });
 const form = css({ display: "flex", flexDirection: "column", gap: "12px" });
 const check = css({
