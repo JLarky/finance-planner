@@ -32,7 +32,12 @@ export function loginHref(returnTo = "/app") {
 export function redirectToLogin(returnTo = "/app") {
   return redirect(loginHref(returnTo));
 }
-export type Challenge = { kind: "register" | "login"; challenge: string; userId?: string };
+export type Challenge = {
+  kind: "register" | "login" | "invite";
+  challenge: string;
+  userId?: string;
+  inviteId?: string;
+};
 export function setChallenge(state: { set(k: string, v: unknown): void }, value: Challenge) {
   state.set("challenge", value);
 }
@@ -44,11 +49,13 @@ export function takeChallenge(state: {
   state.unset("challenge");
   if (!value || typeof value !== "object") return null;
   const r = value as Record<string, unknown>;
-  return (r.kind === "register" || r.kind === "login") && typeof r.challenge === "string"
+  return (r.kind === "register" || r.kind === "login" || r.kind === "invite") &&
+    typeof r.challenge === "string"
     ? {
         kind: r.kind,
         challenge: r.challenge,
         userId: typeof r.userId === "string" ? r.userId : undefined,
+        inviteId: typeof r.inviteId === "string" ? r.inviteId : undefined,
       }
     : null;
 }

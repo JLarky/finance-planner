@@ -6,7 +6,14 @@ import {
 } from "@simplewebauthn/browser";
 export const PasskeyButtons = clientEntry(
   "/app/ui/passkey-buttons.tsx",
-  function PasskeyButtons(h: Handle<{ mode: "login"; returnTo: string; error?: string | null }>) {
+  function PasskeyButtons(
+    h: Handle<{
+      mode: "login" | "invite";
+      returnTo: string;
+      inviteId?: string;
+      error?: string | null;
+    }>,
+  ) {
     let busy = false;
     let error = h.props.error ?? null;
     async function post(url: string, body?: unknown) {
@@ -20,7 +27,15 @@ export const PasskeyButtons = clientEntry(
       if (!r.ok) throw new Error(typeof j.error === "string" ? j.error : "Request failed");
       return j;
     }
-    async function run(kind: "register" | "login") {
+    async function run(kind: "register" | "login" | "invite") {
+      if (kind === "invite") {
+        if (!h.props.inviteId) throw new Error("Missing invite id");
+        const options = await post("/api/auth/invite/options", { inviteId: h.props.inviteId });
+        const response = await startRegistration({ optionsJSON: options as never });
+        await post("/api/auth/invite/verify", { response, label: "Linked device" });
+        window.location.href = h.props.returnTo || "/app";
+        return;
+      }
       const options = await post(`/api/auth/${kind}/options`);
       const response =
         kind === "register"
@@ -29,7 +44,7 @@ export const PasskeyButtons = clientEntry(
       await post(`/api/auth/${kind}/verify`, { response });
       window.location.href = h.props.returnTo || "/app";
     }
-    async function click(kind: "register" | "login") {
+    async function click(kind: "register" | "login" | "invite") {
       if (busy) return;
       if (!browserSupportsWebAuthn()) {
         error = "This browser does not support passkeys.";
@@ -50,44 +65,69 @@ export const PasskeyButtons = clientEntry(
     return () => (
       <div mix={css({ display: "flex", flexDirection: "column", gap: "12px", marginTop: "24px" })}>
         {error ? <p mix={css({ color: "#ffb4a8", margin: 0 })}>{error}</p> : null}
-        <button
-          type="button"
-          disabled={busy}
-          mix={[
-            css({
-              border: 0,
-              borderRadius: "10px",
-              padding: "13px",
-              font: "inherit",
-              fontWeight: 700,
-              cursor: "pointer",
-              background: "#b8e986",
-              color: "#10251d",
-            }),
-            on("click", () => void click("register")),
-          ]}
-        >
-          {busy ? "Waiting for passkey…" : "Create account with passkey"}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          mix={[
-            css({
-              border: "1px solid #527061",
-              borderRadius: "10px",
-              padding: "13px",
-              font: "inherit",
-              fontWeight: 700,
-              cursor: "pointer",
-              background: "transparent",
-              color: "#f1f6ed",
-            }),
-            on("click", () => void click("login")),
-          ]}
-        >
-          {busy ? "Waiting for passkey…" : "Sign in with existing passkey"}
-        </button>
+        {h.props.mode === "login" ? (
+          <button
+            type="button"
+            disabled={busy}
+            mix={[
+              css({
+                border: 0,
+                borderRadius: "10px",
+                padding: "13px",
+                font: "inherit",
+                fontWeight: 700,
+                cursor: "pointer",
+                background: "#b8e986",
+                color: "#10251d",
+              }),
+              on("click", () => void click("register")),
+            ]}
+          >
+            {busy ? "Waiting for passkey…" : "Create account with passkey"}
+          </button>
+        ) : null}
+        {h.props.mode === "login" ? (
+          <button
+            type="button"
+            disabled={busy}
+            mix={[
+              css({
+                border: "1px solid #527061",
+                borderRadius: "10px",
+                padding: "13px",
+                font: "inherit",
+                fontWeight: 700,
+                cursor: "pointer",
+                background: "transparent",
+                color: "#f1f6ed",
+              }),
+              on("click", () => void click("login")),
+            ]}
+          >
+            {busy ? "Waiting for passkey…" : "Sign in with existing passkey"}
+          </button>
+        ) : null}
+        {h.props.mode === "invite" ? (
+          <button
+            type="button"
+            disabled={busy}
+            mix={[
+              css({
+                border: 0,
+                borderRadius: "10px",
+                padding: "13px",
+                font: "inherit",
+                fontWeight: 700,
+                cursor: "pointer",
+                background: "#b8e986",
+                color: "#10251d",
+              }),
+              on("click", () => void click("invite")),
+            ]}
+          >
+            {busy ? "Waiting for passkey…" : "Link this device with passkey"}
+          </button>
+        ) : null}
       </div>
     );
   },
