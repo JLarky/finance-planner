@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 export type Kv = {
   get<T>(key: readonly string[]): Promise<{ value: T | null }>;
   set(key: readonly string[], value: unknown): Promise<unknown>;
+  delete?(key: readonly string[]): Promise<unknown>;
 };
 type DenoLike = { openKv(url?: string): Promise<Kv> };
 const localPath = path.join(

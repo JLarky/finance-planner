@@ -2,7 +2,15 @@ import { createController } from "remix/router";
 import { redirect } from "remix/response/redirect";
 import { devAuthEnabled, userId, redirectToLogin } from "../middleware/auth-session.ts";
 import { routes } from "../routes.ts";
-import { ensureDevUser, getUser, saveUser } from "../data/users.ts";
+import {
+  createDeviceInvite,
+  ensureDevUser,
+  getDeviceInvite,
+  getUser,
+  listPendingDeviceInvites,
+  revokeDeviceInvite,
+  saveUser,
+} from "../data/users.ts";
 import {
   isTaxableAccount,
   recommendContribution,
@@ -12,6 +20,16 @@ import {
 import { HomePage } from "../ui/home-page.tsx";
 import { LoginPage } from "../ui/login-page.tsx";
 import { DashboardPage } from "../ui/dashboard-page.tsx";
+import { AccountPage } from "../ui/account-page.tsx";
+import { InvitePage } from "../ui/invite-page.tsx";
+
+function withQuery(href: string, params: Record<string, string | null | undefined>): string {
+  const url = new URL(href, "http://local");
+  for (const [key, value] of Object.entries(params)) {
+    if (value) url.searchParams.set(key, value);
+  }
+  return `${url.pathname}${url.search}`;
+}
 export default createController(routes, {
   actions: {
     async home(c) {
@@ -36,6 +54,78 @@ export default createController(routes, {
       c.session.regenerateId();
       c.session.set("userId", user.id);
       return redirect(routes.app.href());
+    },
+    async account(c) {
+      const id = userId(c.session);
+      if (!id) return redirectToLogin(routes.account.href());
+      const user = await getUser(id);
+      if (!user) return redirectToLogin(routes.account.href());
+      const url = new URL(c.request.url);
+      if (c.request.method === "POST") {
+        const form = await c.request.formData();
+        const intent = text(form, "intent");
+        if (intent === "create-device-invite") {
+          const invite = await createDeviceInvite(id);
+          if (!invite)
+            return c.render(
+              <AccountPage
+                user={user}
+                pendingInvites={listPendingDeviceInvites(user)}
+                error="Could not create invite"
+                notice={null}
+              />,
+              { status: 500 },
+            );
+          return redirect(withQuery(routes.account.href(), { deviceInvite: invite.id }));
+        }
+        if (intent === "revoke-device-invite") {
+          const result = await revokeDeviceInvite(id, text(form, "inviteId"));
+          if (!result.ok)
+            return c.render(
+              <AccountPage
+                user={user}
+                pendingInvites={listPendingDeviceInvites(user)}
+                error={result.error}
+                notice={null}
+              />,
+              { status: 400 },
+            );
+          return redirect(withQuery(routes.account.href(), { revoked: "1" }));
+        }
+      }
+      const current = await getUser(id);
+      return c.render(
+        <AccountPage
+          user={current ?? user}
+          pendingInvites={listPendingDeviceInvites(current ?? user)}
+          error={null}
+          notice={
+            url.searchParams.get("deviceInvite")
+              ? `Invite ready: /invite/${url.searchParams.get("deviceInvite")}`
+              : url.searchParams.get("revoked") === "1"
+                ? "Invite revoked."
+                : null
+          }
+        />,
+      );
+    },
+    async invite(c) {
+      const inviteId = c.params.inviteId;
+      if (!inviteId)
+        return c.render(<InvitePage inviteId="" error="Invite not found" />, { status: 404 });
+      if (userId(c.session)) return redirect(routes.app.href());
+      const invite = await getDeviceInvite(inviteId);
+      if (!invite)
+        return c.render(<InvitePage inviteId={inviteId} error="Invite not found" />, {
+          status: 404,
+        });
+      if (invite.claimedAt)
+        return c.render(<InvitePage inviteId={inviteId} error="Invite already used" />, {
+          status: 400,
+        });
+      if (Date.parse(invite.expiresAt) < Date.now())
+        return c.render(<InvitePage inviteId={inviteId} error="Invite expired" />, { status: 400 });
+      return c.render(<InvitePage inviteId={inviteId} error={null} />);
     },
     async app(c) {
       const id = userId(c.session);

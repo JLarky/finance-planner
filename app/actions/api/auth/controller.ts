@@ -1,7 +1,14 @@
 import { createController } from "remix/router";
 import { randomUUID } from "node:crypto";
 import { routes } from "../../../routes.ts";
-import { createUser, findUserId, getUser, updateCounter } from "../../../data/users.ts";
+import {
+  claimDeviceInvite,
+  createUser,
+  findUserId,
+  getDeviceInvite,
+  getUser,
+  updateCounter,
+} from "../../../data/users.ts";
 import { setChallenge, takeChallenge } from "../../../middleware/auth-session.ts";
 import { json } from "../../../utils/json.ts";
 import {
@@ -73,6 +80,50 @@ export default createController(routes.api.auth, {
       await updateCounter(user, id, v.authenticationInfo.newCounter);
       session.regenerateId();
       session.set("userId", uid);
+      return json({ ok: true });
+    },
+    async inviteOptions({ request, session }) {
+      const w = resolveWebAuthnRequest(request);
+      if (!w) return json({ error: "Origin not allowed" }, 400);
+      const body = (await request.json()) as { inviteId?: string };
+      const inviteId = body.inviteId?.trim();
+      if (!inviteId) return json({ error: "Missing invite id" }, 400);
+      const invite = await getDeviceInvite(inviteId);
+      if (!invite) return json({ error: "Invite not found" }, 404);
+      if (invite.claimedAt) return json({ error: "Invite already used" }, 400);
+      if (Date.parse(invite.expiresAt) < Date.now()) return json({ error: "Invite expired" }, 400);
+      const user = await getUser(invite.userId);
+      if (!user) return json({ error: "User not found" }, 404);
+      const options = await registrationOptions(invite.userId, w.rpID);
+      setChallenge(session, { kind: "invite", challenge: options.challenge, inviteId });
+      return json({
+        ...options,
+        excludeCredentials: user.passkeys.map((passkey) => ({
+          id: passkey.credentialId,
+          transports: passkey.transports,
+        })),
+      });
+    },
+    async inviteVerify({ request, session }) {
+      const w = resolveWebAuthnRequest(request);
+      const pending = takeChallenge(session);
+      if (!w || !pending || pending.kind !== "invite" || !pending.inviteId)
+        return json({ error: "Missing invite challenge" }, 400);
+      const body = (await request.json()) as { response?: unknown; label?: string };
+      if (!body.response) return json({ error: "Missing response" }, 400);
+      const v = await verifyRegistration({
+        response: body.response as never,
+        expectedChallenge: pending.challenge,
+        expectedOrigin: w.origin,
+        expectedRPID: w.rpID,
+      });
+      const passkey = passkeyFromRegistration(v);
+      if (!v.verified || !passkey) return json({ error: "Invite registration failed" }, 400);
+      const labeled = { ...passkey, label: body.label?.trim() || "Linked device" };
+      const claimed = await claimDeviceInvite(pending.inviteId, labeled);
+      if (!claimed.ok) return json({ error: claimed.error }, 400);
+      session.regenerateId();
+      session.set("userId", claimed.user.id);
       return json({ ok: true });
     },
   },

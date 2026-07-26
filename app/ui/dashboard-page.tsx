@@ -36,9 +36,14 @@ export function DashboardPage(h: Handle<{ user: User; plan?: RebalancePlan }>) {
           mix={css({ display: "flex", justifyContent: "space-between", alignItems: "center" })}
         >
           <strong>Finance Planner</strong>
-          <form method="POST" action="/logout">
-            <button mix={button({ secondary: true })}>Sign out</button>
-          </form>
+          <div mix={css({ display: "flex", gap: "10px", alignItems: "center" })}>
+            <a href="/account" mix={button({ secondary: true })}>
+              Account
+            </a>
+            <form method="POST" action="/logout">
+              <button mix={button({ secondary: true })}>Sign out</button>
+            </form>
+          </div>
         </header>
 
         <section mix={css({ padding: "56px 0" })}>

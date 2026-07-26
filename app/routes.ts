@@ -4,6 +4,8 @@ export const routes = route({
   home: "/",
   login: "/login",
   app: "/app",
+  account: "/account",
+  invite: "/invite/:inviteId",
   logout: post("logout"),
   devLogin: post("dev-login"),
   api: route("api", {
@@ -12,6 +14,8 @@ export const routes = route({
       registerVerify: post("register/verify"),
       loginOptions: post("login/options"),
       loginVerify: post("login/verify"),
+      inviteOptions: post("invite/options"),
+      inviteVerify: post("invite/verify"),
     }),
   }),
 });
