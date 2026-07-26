@@ -29,7 +29,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-Open [http://localhost:4576](http://localhost:4576). `/` is public, `/login` creates or authenticates a passkey, and `/app` is the first authenticated workspace.
+Open the URL printed by `boo peek finance-planner-dev` (currently [http://localhost:5471](http://localhost:5471)). `/` is public, `/login` creates or authenticates a passkey, and `/app` is the first authenticated workspace.
 
 The local fallback is written to `data/app-store.local.json` and is ignored by git once created.
 
