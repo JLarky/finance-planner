@@ -9,6 +9,19 @@ Private investment planning app, built from the same small Remix/Vite foundation
 - Deno KV in Deno Deploy
 - Local JSON fallback during Node development
 
+## V1 planner features
+
+The authenticated workspace currently supports:
+
+- Multiple accounts with account-level cash and trading restrictions
+- Editable holdings with explicit one-fund-to-one-exposure mappings
+- Editable Global Factor Mix target template with 100% validation
+- Current and target percentages, values, dollar drift, and tolerance status
+- Cash-first, account-local rebalance recommendations with permitted exchanges
+- Projected post-transaction allocation and restriction explanations
+- Contribution-only planning against future target values without selling
+- Generic, user-entered investment names and market values; no brokerage connection or live market data
+
 ## Local development
 
 ```sh
@@ -17,7 +30,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-Open [http://localhost:4576](http://localhost:4576). `/` is public, `/login` creates or authenticates a passkey, and `/app` is the first authenticated workspace.
+Open the URL printed by `boo peek finance-planner-dev` (currently [http://localhost:5471](http://localhost:5471)). `/` is public, `/login` creates or authenticates a passkey, and `/app` is the first authenticated workspace.
 
 The local fallback is written to `data/app-store.local.json` and is ignored by git once created.
 

@@ -14,6 +14,13 @@ const storage = createCookieSessionStorage();
 export function authSession() {
   return session(cookie, storage);
 }
+export function devAuthEnabled(): boolean {
+  return (
+    process.env.DEV_AUTH_BYPASS === "1" &&
+    process.env.NODE_ENV !== "production" &&
+    !process.env.DENO_DEPLOYMENT_ID
+  );
+}
 export function userId(state: { get(key: string): unknown }): string | null {
   const value = state.get("userId");
   return typeof value === "string" && value ? value : null;

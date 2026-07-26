@@ -3,7 +3,9 @@ import { css } from "remix/ui";
 import { Document } from "./document.tsx";
 import { PasskeyButtons } from "./passkey-buttons.tsx";
 import { shell, muted } from "./styles.ts";
-export function LoginPage(h: Handle<{ returnTo: string; error: string | null }>) {
+export function LoginPage(
+  h: Handle<{ returnTo: string; error: string | null; devAuthEnabled: boolean }>,
+) {
   return () => (
     <Document title="Sign in · Finance Planner">
       <main mix={shell}>
@@ -35,6 +37,30 @@ export function LoginPage(h: Handle<{ returnTo: string; error: string | null }>)
             Create an account or sign in using the passkey stored on this device.
           </p>
           <PasskeyButtons mode="login" returnTo={h.props.returnTo} error={h.props.error} />
+          {h.props.devAuthEnabled ? (
+            <form method="POST" action="/dev-login">
+              <button
+                type="submit"
+                mix={css({
+                  border: "1px dashed #7fae5c",
+                  borderRadius: "10px",
+                  padding: "12px 14px",
+                  width: "100%",
+                  marginTop: "12px",
+                  font: "inherit",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  background: "transparent",
+                  color: "#b8e986",
+                })}
+              >
+                Use local dev account
+              </button>
+              <p mix={css({ ...muted, fontSize: "12px", margin: "8px 0 0" })}>
+                Only available when DEV_AUTH_BYPASS=1 in local development.
+              </p>
+            </form>
+          ) : null}
           <a
             href="/"
             mix={css({ ...muted, display: "block", marginTop: "24px", fontSize: "13px" })}

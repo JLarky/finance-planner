@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,5 +25,6 @@ export async function readLocal(): Promise<LocalStore> {
   }
 }
 export async function writeLocal(store: LocalStore) {
+  await mkdir(path.dirname(localPath), { recursive: true });
   await writeFile(localPath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
 }
