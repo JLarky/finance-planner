@@ -5,6 +5,7 @@ import {
   accountLabel,
   isTaxableAccount,
   money,
+  portfolioTsv,
   portfolioTotal,
   summarizePortfolio,
   targetTotal,
@@ -16,6 +17,7 @@ import {
 } from "../data/portfolio.ts";
 import { Document } from "./document.tsx";
 import { button, muted, shell } from "./styles.ts";
+import { TsvExport } from "./tsv-export.tsx";
 
 type Portfolio = User["portfolio"];
 
@@ -95,6 +97,7 @@ export function DashboardPage(h: Handle<{ user: User; plan?: RebalancePlan }>) {
             validTargets={validTargets}
             canPlan={canPlan}
           />
+          <TsvExport content={portfolioTsv(portfolio)} />
           {h.props.plan?.kind === "rebalance" ? (
             <PlanResult plan={h.props.plan} accountName={accountName} />
           ) : null}
