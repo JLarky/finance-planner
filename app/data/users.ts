@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { openKv, readLocal, writeLocal } from "./kv.ts";
-import { createDefaultPortfolio, type Portfolio } from "./portfolio.ts";
+import { createDefaultPortfolio, normalizePortfolio, type Portfolio } from "./portfolio.ts";
 
 export type Passkey = {
   credentialId: string;
@@ -15,10 +15,10 @@ export async function getUser(id: string): Promise<User | null> {
   const kv = await openKv();
   if (kv) {
     const user = (await kv.get<User>(["user", id])).value;
-    return user ? { ...user, portfolio: user.portfolio ?? createDefaultPortfolio() } : null;
+    return user ? { ...user, portfolio: normalizePortfolio(user.portfolio) } : null;
   }
   const user = ((await readLocal()).users[id] as User | undefined) ?? null;
-  return user ? { ...user, portfolio: user.portfolio ?? createDefaultPortfolio() } : null;
+  return user ? { ...user, portfolio: normalizePortfolio(user.portfolio) } : null;
 }
 export async function saveUser(user: User) {
   const kv = await openKv();

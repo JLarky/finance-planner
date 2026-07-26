@@ -19,3 +19,29 @@ run({
     return response.body ?? response.text();
   },
 });
+
+function syncTaxableSales(form: HTMLFormElement) {
+  const type = form.querySelector<HTMLSelectElement>("[data-account-type]");
+  const taxableSales = form.querySelector<HTMLElement>("[data-taxable-sales]");
+  if (!type || !taxableSales) return;
+  taxableSales.hidden = type.value !== "taxable" && type.value !== "other-taxable";
+  if (taxableSales.hidden) {
+    const checkbox = taxableSales.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    if (checkbox) checkbox.checked = false;
+  }
+}
+
+function syncAllAccountForms() {
+  for (const form of document.querySelectorAll<HTMLFormElement>("[data-account-form]"))
+    syncTaxableSales(form);
+}
+
+document.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLSelectElement) || !target.matches("[data-account-type]")) return;
+  const form = target.closest<HTMLFormElement>("[data-account-form]");
+  if (form) syncTaxableSales(form);
+});
+document.addEventListener("DOMContentLoaded", syncAllAccountForms);
+document.addEventListener("remix:frame", syncAllAccountForms);
+syncAllAccountForms();
