@@ -7,7 +7,7 @@ port 5471. Use a different port for this checkout.
 
 ```sh
 pnpm install
-boo new finance-planner-export --detached -- env DEV_AUTH_BYPASS=1 PORT=5472 pnpm dev --host 127.0.0.1 --port 5472
+boo new finance-planner-export --detached -- env DEV_AUTH_BYPASS=1 FINANCE_PLANNER_DATA_PATH=data/app-store.export.local.json PORT=5472 pnpm dev --host 127.0.0.1 --port 5472
 ```
 
 `boo` keeps the dev server in the background. Check its output and URL with:
@@ -25,7 +25,19 @@ printed by `boo peek` and keep the existing app on 5471 untouched.
 visit `/login`, and choose **Use local dev account**. This is disabled in
 production and on Deno Deploy.
 
-The local JSON store is `data/app-store.local.json`; it is ignored by git.
+## Data isolation
+
+Node development uses a JSON file as its local database. The app resolves
+`FINANCE_PLANNER_DATA_PATH` relative to the worktree, so every server should
+set a unique filename. This checkout uses `data/app-store.export.local.json`;
+the existing app on port 5471 can keep using the default
+`data/app-store.local.json`. They therefore do not share users or portfolio
+data. The files are ignored by git.
+
+The isolation is file-based, not provided by the port itself: two servers that
+omit `FINANCE_PLANNER_DATA_PATH` from the same worktree would share the
+default file. Deno Deploy does not use these files; it uses the Deno KV store
+selected by `DENO_KV_URL`.
 
 ## Browser testing
 
