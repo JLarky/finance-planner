@@ -9,6 +9,18 @@ Private investment planning app, built from the same small Remix/Vite foundation
 - Deno KV in Deno Deploy
 - Local JSON fallback during Node development
 
+## V1 planner features
+
+The authenticated workspace currently supports:
+
+- Multiple accounts with account-level cash and trading restrictions
+- Holdings mapped to generic portfolio exposures
+- Target allocation percentages with 100% validation
+- Current allocation, target value, dollar drift, and tolerance status
+- Cash-first rebalance recommendations that respect account boundaries
+- Contribution-only planning without selling existing holdings
+- Generic, user-entered investment names and market values; no brokerage connection or live market data
+
 ## Local development
 
 ```sh
