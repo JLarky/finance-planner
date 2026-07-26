@@ -56,6 +56,33 @@ void test("portfolio exports as tab-separated sections", () => {
   assert.equal(exported.includes(","), false);
 });
 
+void test("portfolio export keeps dollar drift parseable in spreadsheets", () => {
+  const value = createDefaultPortfolio();
+  value.exposures = [{ id: "broad-us", name: "Broad US market", targetPercent: 100 }];
+  value.accounts.push({
+    id: "account",
+    name: "Example account",
+    type: "taxable",
+    cash: 0,
+    allowTaxableSales: false,
+    allowPurchases: true,
+    allowSales: true,
+    expectContributions: true,
+  });
+  value.holdings.push({
+    id: "holding",
+    accountId: "account",
+    name: "Investment A",
+    value: 100,
+    exposureId: "broad-us",
+    canBuy: true,
+    canSell: true,
+  });
+  const exported = portfolioTsv(value);
+  assert.equal(exported.includes("+$0"), false);
+  assert.match(exported, /\t\$0\tOn Target/);
+});
+
 void test("zero-value portfolios do not mark every exposure underweight", () => {
   const value = createDefaultPortfolio();
   assert.ok(summarizePortfolio(value).every((item) => item.status === "on-target"));

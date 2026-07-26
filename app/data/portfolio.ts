@@ -699,7 +699,8 @@ function tsvValue(value: unknown): string {
 }
 
 function signedMoney(value: number): string {
-  return `${value >= 0 ? "+" : "-"}${money(Math.abs(value))}`;
+  if (value === 0) return money(0);
+  return value > 0 ? money(value) : `-${money(Math.abs(value))}`;
 }
 
 function statusLabel(status: string): string {
