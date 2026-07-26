@@ -5,6 +5,7 @@ export const routes = route({
   login: "/login",
   app: "/app",
   logout: post("logout"),
+  devLogin: post("dev-login"),
   api: route("api", {
     auth: route("auth", {
       registerOptions: post("register/options"),

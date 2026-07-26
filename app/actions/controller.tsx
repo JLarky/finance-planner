@@ -1,9 +1,8 @@
 import { createController } from "remix/router";
 import { redirect } from "remix/response/redirect";
-import { userId, redirectToLogin } from "../middleware/auth-session.ts";
+import { devAuthEnabled, userId, redirectToLogin } from "../middleware/auth-session.ts";
 import { routes } from "../routes.ts";
-import { getUser } from "../data/users.ts";
-import { saveUser } from "../data/users.ts";
+import { ensureDevUser, getUser, saveUser } from "../data/users.ts";
 import { recommendContribution, recommendRebalance, type AccountType } from "../data/portfolio.ts";
 import { HomePage } from "../ui/home-page.tsx";
 import { LoginPage } from "../ui/login-page.tsx";
@@ -18,7 +17,20 @@ export default createController(routes, {
       const url = new URL(c.request.url);
       const returnTo = url.searchParams.get("returnTo") || "/app";
       if (id) return redirect(returnTo);
-      return c.render(<LoginPage returnTo={returnTo} error={url.searchParams.get("error")} />);
+      return c.render(
+        <LoginPage
+          returnTo={returnTo}
+          error={url.searchParams.get("error")}
+          devAuthEnabled={devAuthEnabled()}
+        />,
+      );
+    },
+    async devLogin(c) {
+      if (!devAuthEnabled()) return new Response("Not Found", { status: 404 });
+      const user = await ensureDevUser();
+      c.session.regenerateId();
+      c.session.set("userId", user.id);
+      return redirect(routes.app.href());
     },
     async app(c) {
       const id = userId(c.session);

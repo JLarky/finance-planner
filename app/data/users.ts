@@ -61,3 +61,16 @@ export async function updateCounter(user: User, credentialId: string, counter: n
     passkeys: user.passkeys.map((p) => (p.credentialId === credentialId ? { ...p, counter } : p)),
   });
 }
+
+export async function ensureDevUser(): Promise<User> {
+  const existing = await getUser("dev-user");
+  if (existing) return existing;
+  const user: User = {
+    id: "dev-user",
+    createdAt: new Date().toISOString(),
+    passkeys: [],
+    portfolio: createDefaultPortfolio(),
+  };
+  await saveUser(user);
+  return user;
+}
