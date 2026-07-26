@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   createDefaultPortfolio,
   portfolioTotal,
+  portfolioTsv,
   recommendContribution,
   recommendRebalance,
   summarizePortfolio,
@@ -41,6 +42,45 @@ void test("summaries include cash in the portfolio denominator", () => {
   const value = portfolio();
   assert.equal(portfolioTotal(value), 100);
   assert.equal(summarizePortfolio(value).find((item) => item.id === "broad-us")?.currentPercent, 0);
+});
+
+void test("portfolio exports as tab-separated sections", () => {
+  const value = portfolio();
+  const exported = portfolioTsv(value);
+  assert.match(exported, /Finance Planner export\nGenerated\t/);
+  assert.match(exported, /Portfolio summary\nMetric\tValue/);
+  assert.match(exported, /Accounts\nAccount\tType\tCash/);
+  assert.match(exported, /Holdings\nFund\tAccount\tExposure/);
+  assert.match(exported, /Portfolio comparison\nExposure\tCurrent percentage/);
+  assert.ok(exported.split("\n").some((line) => line.includes("\t")));
+  assert.equal(exported.includes(","), false);
+});
+
+void test("portfolio export keeps dollar drift parseable in spreadsheets", () => {
+  const value = createDefaultPortfolio();
+  value.exposures = [{ id: "broad-us", name: "Broad US market", targetPercent: 100 }];
+  value.accounts.push({
+    id: "account",
+    name: "Example account",
+    type: "taxable",
+    cash: 0,
+    allowTaxableSales: false,
+    allowPurchases: true,
+    allowSales: true,
+    expectContributions: true,
+  });
+  value.holdings.push({
+    id: "holding",
+    accountId: "account",
+    name: "Investment A",
+    value: 100,
+    exposureId: "broad-us",
+    canBuy: true,
+    canSell: true,
+  });
+  const exported = portfolioTsv(value);
+  assert.equal(exported.includes("+$0"), false);
+  assert.match(exported, /\t\$0\tOn Target/);
 });
 
 void test("zero-value portfolios do not mark every exposure underweight", () => {

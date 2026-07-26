@@ -614,3 +614,95 @@ export function money(value: number): string {
     maximumFractionDigits: 0,
   }).format(value);
 }
+
+export function portfolioTsv(portfolio: Portfolio): string {
+  const total = portfolioTotal(portfolio);
+  const summaries = summarizePortfolio(portfolio);
+  const cash = portfolio.accounts.reduce((sum, account) => sum + account.cash, 0);
+  const accountNames = new Map(portfolio.accounts.map((account) => [account.id, account.name]));
+  const exposureNames = new Map(
+    portfolio.exposures.map((exposure) => [exposure.id, exposure.name]),
+  );
+  const row = (...values: unknown[]) => values.map(tsvValue).join("\t");
+  const lines = [
+    row("Finance Planner export"),
+    row("Generated", new Date().toISOString()),
+    "",
+    row("Portfolio summary"),
+    row("Metric", "Value"),
+    row("Total portfolio", money(total)),
+    row("Invested", money(total - cash)),
+    row("Uninvested cash", money(cash)),
+    row("Accounts", portfolio.accounts.length),
+    row("Target portfolio", portfolio.targetName),
+    row("Target allocation total", `${targetTotal(portfolio).toFixed(1)}%`),
+    "",
+    row("Accounts"),
+    row("Account", "Type", "Cash", "Allow purchases", "Allow sales", "Contributions expected"),
+    ...portfolio.accounts.map((account) =>
+      row(
+        account.name,
+        accountLabel(account.type),
+        money(account.cash),
+        account.allowPurchases ? "Yes" : "No",
+        account.allowSales ? "Yes" : "No",
+        account.expectContributions ? "Yes" : "No",
+      ),
+    ),
+    "",
+    row("Holdings"),
+    row("Fund", "Account", "Exposure", "Current value", "Allow purchases", "Allow sales"),
+    ...portfolio.holdings.map((holding) =>
+      row(
+        holding.name,
+        accountNames.get(holding.accountId) ?? "Unknown account",
+        exposureNames.get(holding.exposureId) ?? "Unmapped",
+        money(holding.value),
+        holding.canBuy ? "Yes" : "No",
+        holding.canSell ? "Yes" : "No",
+      ),
+    ),
+    "",
+    row("Target allocation"),
+    row("Exposure", "Target percentage"),
+    ...portfolio.exposures.map((exposure) =>
+      row(exposure.name, `${exposure.targetPercent.toFixed(1)}%`),
+    ),
+    "",
+    row("Portfolio comparison"),
+    row(
+      "Exposure",
+      "Current percentage",
+      "Target percentage",
+      "Current value",
+      "Target value",
+      "Dollar drift",
+      "Status",
+    ),
+    ...summaries.map((summary) =>
+      row(
+        summary.name,
+        `${summary.currentPercent.toFixed(1)}%`,
+        `${summary.targetPercent.toFixed(1)}%`,
+        money(summary.currentValue),
+        money(summary.targetValue),
+        signedMoney(summary.dollarDrift),
+        statusLabel(summary.status),
+      ),
+    ),
+  ];
+  return lines.join("\n");
+}
+
+function tsvValue(value: unknown): string {
+  return String(value ?? "").replace(/[\t\r\n]+/g, " ");
+}
+
+function signedMoney(value: number): string {
+  if (value === 0) return money(0);
+  return value > 0 ? money(value) : `-${money(Math.abs(value))}`;
+}
+
+function statusLabel(status: string): string {
+  return status.replace("-", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}

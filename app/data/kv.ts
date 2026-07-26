@@ -8,10 +8,9 @@ export type Kv = {
   delete?(key: readonly string[]): Promise<unknown>;
 };
 type DenoLike = { openKv(url?: string): Promise<Kv> };
-const localPath = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../data/app-store.local.json",
-);
+const localPath = process.env.FINANCE_PLANNER_DATA_PATH
+  ? path.resolve(process.cwd(), process.env.FINANCE_PLANNER_DATA_PATH)
+  : path.join(path.dirname(fileURLToPath(import.meta.url)), "../../data/app-store.local.json");
 export async function openKv(): Promise<Kv | null> {
   const deno = (globalThis as { Deno?: DenoLike }).Deno;
   return deno?.openKv ? deno.openKv(process.env.DENO_KV_URL) : null;

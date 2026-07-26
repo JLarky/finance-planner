@@ -32,7 +32,9 @@ pnpm dev
 
 Open the URL printed by `boo peek finance-planner-dev` (currently [http://localhost:5471](http://localhost:5471)). `/` is public, `/login` creates or authenticates a passkey, and `/app` is the first authenticated workspace.
 
-The local fallback is written to `data/app-store.local.json` and is ignored by git once created.
+See [`local-dev.md`](./local-dev.md) for the isolated `boo` workflow, local auth shortcut, agent-browser testing, and per-server data setup.
+
+During Node development, the local fallback is a JSON file rather than a real database. By default it is `data/app-store.local.json`, relative to the worktree, and is ignored by git. Set `FINANCE_PLANNER_DATA_PATH` to a unique path when running more than one server from the same worktree; each server should use a different file. Deno deployments use the KV database selected by `DENO_KV_URL` instead.
 
 ## Deno Deploy
 
