@@ -9,7 +9,7 @@ import {
   getUser,
   updateCounter,
 } from "../../../data/users.ts";
-import { setChallenge, takeChallenge } from "../../../middleware/auth-session.ts";
+import { bindUserSession, setChallenge, takeChallenge } from "../../../middleware/auth-session.ts";
 import { json } from "../../../utils/json.ts";
 import {
   authenticationOptions,
@@ -47,7 +47,7 @@ export default createController(routes.api.auth, {
       if (!v.verified || !passkey) return json({ error: "Registration failed" }, 400);
       const user = await createUser(passkey, pending.userId);
       session.regenerateId();
-      session.set("userId", user.id);
+      bindUserSession(session, request, user.id);
       return json({ ok: true });
     },
     async loginOptions({ request, session }) {
@@ -79,7 +79,7 @@ export default createController(routes.api.auth, {
       if (!v.verified) return json({ error: "Authentication failed" }, 401);
       await updateCounter(user, id, v.authenticationInfo.newCounter);
       session.regenerateId();
-      session.set("userId", uid);
+      bindUserSession(session, request, uid);
       return json({ ok: true });
     },
     async inviteOptions({ request, session }) {
@@ -123,7 +123,7 @@ export default createController(routes.api.auth, {
       const claimed = await claimDeviceInvite(pending.inviteId, labeled);
       if (!claimed.ok) return json({ error: claimed.error }, 400);
       session.regenerateId();
-      session.set("userId", claimed.user.id);
+      bindUserSession(session, request, claimed.user.id);
       return json({ ok: true });
     },
   },

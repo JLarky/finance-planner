@@ -20,9 +20,21 @@ export function devAuthEnabled(): boolean {
     !process.env.DENO_DEPLOYMENT_ID
   );
 }
-export function userId(state: { get(key: string): unknown }): string | null {
+export function userId(state: { get(key: string): unknown }, request?: Request): string | null {
+  if (request) {
+    const boundHost = state.get("sessionHost");
+    if (typeof boundHost !== "string" || boundHost !== new URL(request.url).host) return null;
+  }
   const value = state.get("userId");
   return typeof value === "string" && value ? value : null;
+}
+export function bindUserSession(
+  state: { set(key: string, value: unknown): void },
+  request: Request,
+  id: string,
+): void {
+  state.set("userId", id);
+  state.set("sessionHost", new URL(request.url).host);
 }
 export type Challenge = {
   kind: "register" | "login" | "invite";
