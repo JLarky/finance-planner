@@ -1,6 +1,5 @@
 import { createCookie } from "remix/cookie";
 import { session } from "remix/middleware/session";
-import { redirect } from "remix/response/redirect";
 import { createCookieSessionStorage } from "remix/session-storage/cookie";
 
 const cookie = createCookie("__finance_planner_session", {
@@ -24,13 +23,6 @@ export function devAuthEnabled(): boolean {
 export function userId(state: { get(key: string): unknown }): string | null {
   const value = state.get("userId");
   return typeof value === "string" && value ? value : null;
-}
-export function loginHref(returnTo = "/app") {
-  const target = returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/app";
-  return `/login?returnTo=${encodeURIComponent(target)}`;
-}
-export function redirectToLogin(returnTo = "/app") {
-  return redirect(loginHref(returnTo));
 }
 export type Challenge = {
   kind: "register" | "login" | "invite";

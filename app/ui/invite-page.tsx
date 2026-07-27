@@ -4,7 +4,9 @@ import { Document } from "./document.tsx";
 import { PasskeyButtons } from "./passkey-buttons.tsx";
 import { muted, shell } from "./styles.ts";
 
-export function InvitePage(h: Handle<{ inviteId: string; error: string | null }>) {
+export function InvitePage(
+  h: Handle<{ inviteId: string; error: string | null; signedIn?: boolean }>,
+) {
   return () => (
     <Document title="Device invite · Finance Planner">
       <main mix={shell}>
@@ -33,7 +35,34 @@ export function InvitePage(h: Handle<{ inviteId: string; error: string | null }>
           <p mix={css(muted)}>
             Create a new passkey on this device and attach it to the same Finance Planner account.
           </p>
-          {h.props.error ? (
+          {h.props.signedIn ? (
+            <>
+              <p mix={css({ color: "#ffc1b8" })}>
+                You are already signed in on this device. Sign out first if this invite is for a
+                different device.
+              </p>
+              <div mix={css({ display: "flex", gap: "12px", flexWrap: "wrap" })}>
+                <a href="/app" mix={css({ color: "#b8e986" })}>
+                  Open planner
+                </a>
+                <form method="POST" action="/logout">
+                  <button
+                    type="submit"
+                    mix={css({
+                      border: 0,
+                      background: "transparent",
+                      color: "#b8e986",
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                      font: "inherit",
+                    })}
+                  >
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : h.props.error ? (
             <p mix={css({ color: "#ffc1b8" })}>{h.props.error}</p>
           ) : (
             <PasskeyButtons mode="invite" inviteId={h.props.inviteId} returnTo="/app" />
