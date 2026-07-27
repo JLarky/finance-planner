@@ -1,6 +1,5 @@
 import { createController } from "remix/router";
-import { redirect } from "remix/response/redirect";
-import { devAuthEnabled, userId, redirectToLogin } from "../middleware/auth-session.ts";
+import { devAuthEnabled, userId } from "../middleware/auth-session.ts";
 import { routes } from "../routes.ts";
 import {
   createDeviceInvite,
@@ -24,13 +23,10 @@ import { LoginPage } from "../ui/login-page.tsx";
 import { DashboardPage } from "../ui/dashboard-page.tsx";
 import { AccountPage } from "../ui/account-page.tsx";
 import { InvitePage } from "../ui/invite-page.tsx";
+import { AccessPage } from "../ui/access-page.tsx";
 
-function withQuery(href: string, params: Record<string, string | null | undefined>): string {
-  const url = new URL(href, "http://local");
-  for (const [key, value] of Object.entries(params)) {
-    if (value) url.searchParams.set(key, value);
-  }
-  return `${url.pathname}${url.search}`;
+function returnTo(value: string | null, fallback: string): string {
+  return value?.startsWith("/") && !value.startsWith("//") ? value : fallback;
 }
 export default createController(routes, {
   actions: {
@@ -40,13 +36,13 @@ export default createController(routes, {
     async login(c) {
       const id = userId(c.session);
       const url = new URL(c.request.url);
-      const returnTo = url.searchParams.get("returnTo") || "/app";
-      if (id) return redirect(returnTo);
+      const destination = returnTo(url.searchParams.get("returnTo"), "/app");
       return c.render(
         <LoginPage
-          returnTo={returnTo}
+          returnTo={destination}
           error={url.searchParams.get("error")}
           devAuthEnabled={devAuthEnabled()}
+          signedIn={id != null}
         />,
       );
     },
@@ -55,13 +51,28 @@ export default createController(routes, {
       const user = await ensureDevUser();
       c.session.regenerateId();
       c.session.set("userId", user.id);
-      return redirect(routes.app.href());
+      return c.render(<DashboardPage user={user} />);
     },
     async account(c) {
       const id = userId(c.session);
-      if (!id) return redirectToLogin(routes.account.href());
+      if (!id)
+        return c.render(
+          <AccessPage
+            destination={routes.account.href()}
+            title="Sign in to manage devices"
+            detail="Your account settings are protected. Choose sign in to continue, or return home."
+          />,
+        );
       const user = await getUser(id);
-      if (!user) return redirectToLogin(routes.account.href());
+      if (!user)
+        return c.render(
+          <AccessPage
+            destination={routes.account.href()}
+            title="Your session needs attention"
+            detail="This session no longer matches a saved account. Sign out this session, then sign in again."
+            staleSession
+          />,
+        );
       const url = new URL(c.request.url);
       if (c.request.method === "POST") {
         const form = await c.request.formData();
@@ -78,7 +89,15 @@ export default createController(routes, {
               />,
               { status: 500 },
             );
-          return redirect(withQuery(routes.account.href(), { deviceInvite: invite.id }));
+          const refreshed = (await getUser(id)) ?? user;
+          return c.render(
+            <AccountPage
+              user={refreshed}
+              pendingInvites={listPendingDeviceInvites(refreshed)}
+              error={null}
+              notice={`Invite ready: /invite/${invite.id}`}
+            />,
+          );
         }
         if (intent === "revoke-device-invite") {
           const result = await revokeDeviceInvite(id, text(form, "inviteId"));
@@ -92,7 +111,15 @@ export default createController(routes, {
               />,
               { status: 400 },
             );
-          return redirect(withQuery(routes.account.href(), { revoked: "1" }));
+          const refreshed = (await getUser(id)) ?? user;
+          return c.render(
+            <AccountPage
+              user={refreshed}
+              pendingInvites={listPendingDeviceInvites(refreshed)}
+              error={null}
+              notice="Invite revoked."
+            />,
+          );
         }
       }
       const current = await getUser(id);
@@ -115,7 +142,8 @@ export default createController(routes, {
       const inviteId = c.params.inviteId;
       if (!inviteId)
         return c.render(<InvitePage inviteId="" error="Invite not found" />, { status: 404 });
-      if (userId(c.session)) return redirect(routes.app.href());
+      if (userId(c.session))
+        return c.render(<InvitePage inviteId={inviteId} error={null} signedIn />);
       const invite = await getDeviceInvite(inviteId);
       if (!invite)
         return c.render(<InvitePage inviteId={inviteId} error="Invite not found" />, {
@@ -131,9 +159,24 @@ export default createController(routes, {
     },
     async app(c) {
       const id = userId(c.session);
-      if (!id) return redirectToLogin(routes.app.href());
+      if (!id)
+        return c.render(
+          <AccessPage
+            destination={routes.app.href()}
+            title="Sign in to open your planner"
+            detail="Your portfolio workspace is private. Choose sign in to continue without leaving this page unexpectedly."
+          />,
+        );
       const user = await getUser(id);
-      if (!user) return redirectToLogin(routes.app.href());
+      if (!user)
+        return c.render(
+          <AccessPage
+            destination={routes.app.href()}
+            title="Your session needs attention"
+            detail="This session no longer matches a saved account. Sign out this session, then sign in again."
+            staleSession
+          />,
+        );
       if (c.request.method === "POST") {
         const form = await c.request.formData();
         const intent = text(form, "intent");
@@ -291,7 +334,7 @@ export default createController(routes, {
     async logout(c) {
       c.session.unset("userId");
       c.session.regenerateId();
-      return redirect(routes.home.href());
+      return c.render(<HomePage signedIn={false} />);
     },
   },
 });
