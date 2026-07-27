@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDefaultPortfolio,
+  comparePortfolios,
   portfolioTotal,
   portfolioTsv,
+  parsePortfolioImport,
   recommendContribution,
   recommendRebalance,
   summarizePortfolio,
@@ -81,6 +83,39 @@ void test("portfolio export keeps dollar drift parseable in spreadsheets", () =>
   const exported = portfolioTsv(value);
   assert.equal(exported.includes("+$0"), false);
   assert.match(exported, /\t\$0\tOn Target/);
+});
+
+void test("portfolio imports its TSV and JSON exports", () => {
+  const value = portfolio();
+  for (const source of [portfolioTsv(value), JSON.stringify(value)]) {
+    const imported = parsePortfolioImport(source);
+    if (!imported.ok) throw new Error(imported.error);
+    assert.equal(imported.preview.portfolio.accounts[0]?.name, "Example account");
+    assert.equal(imported.preview.portfolio.holdings[0]?.name, "Investment A");
+    assert.equal(imported.preview.accounts, 1);
+    assert.equal(imported.preview.holdings, 1);
+  }
+});
+
+void test("portfolio import preview compares semantic changes without using ids", () => {
+  const value = portfolio();
+  const imported = parsePortfolioImport(portfolioTsv(value));
+  if (!imported.ok) throw new Error(imported.error);
+  assert.deepEqual(comparePortfolios(value, imported.preview.portfolio), []);
+
+  imported.preview.portfolio.accounts[0]!.cash = 250;
+  const changes = comparePortfolios(value, imported.preview.portfolio);
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0]?.kind, "changed");
+  assert.equal(changes[0]?.area, "account");
+  assert.match(changes[0]?.detail ?? "", /cash \$100.*cash \$250/);
+});
+
+void test("portfolio import rejects malformed input", () => {
+  const imported = parsePortfolioImport("not a portfolio");
+  assert.equal(imported.ok, false);
+  if (imported.ok) return;
+  assert.match(imported.error, /Accounts section/);
 });
 
 void test("zero-value portfolios do not mark every exposure underweight", () => {

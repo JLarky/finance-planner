@@ -3,7 +3,7 @@ import { button, muted } from "./styles.ts";
 
 export const TsvExport = clientEntry(
   "/app/ui/tsv-export.tsx",
-  function TsvExport(h: Handle<{ content: string }>) {
+  function TsvExport(h: Handle<{ content: string; jsonContent: string }>) {
     let status = "";
 
     async function copy() {
@@ -26,16 +26,14 @@ export const TsvExport = clientEntry(
       void h.update();
     }
 
-    function download() {
-      const url = URL.createObjectURL(
-        new Blob([h.props.content], { type: "text/tab-separated-values;charset=utf-8" }),
-      );
+    function download(content: string, filename: string, type: string) {
+      const url = URL.createObjectURL(new Blob([content], { type }));
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = "finance-planner-export.tsv";
+      anchor.download = filename;
       anchor.click();
       URL.revokeObjectURL(url);
-      status = "Downloaded finance-planner-export.tsv.";
+      status = `Downloaded ${filename}.`;
       void h.update();
     }
 
@@ -66,10 +64,35 @@ export const TsvExport = clientEntry(
           </button>
           <button
             type="button"
-            mix={[button({ secondary: true }), on("click", download)]}
+            mix={[
+              button({ secondary: true }),
+              on("click", () =>
+                download(
+                  h.props.content,
+                  "finance-planner-export.tsv",
+                  "text/tab-separated-values;charset=utf-8",
+                ),
+              ),
+            ]}
             data-download-export
           >
             Download .tsv for Excel
+          </button>
+          <button
+            type="button"
+            mix={[
+              button({ secondary: true }),
+              on("click", () =>
+                download(
+                  h.props.jsonContent,
+                  "finance-planner-backup.json",
+                  "application/json;charset=utf-8",
+                ),
+              ),
+            ]}
+            data-download-json
+          >
+            Download JSON backup
           </button>
         </div>
         {status ? (

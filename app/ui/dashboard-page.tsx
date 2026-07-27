@@ -9,6 +9,8 @@ import {
   portfolioTotal,
   summarizePortfolio,
   targetTotal,
+  type PortfolioImportChange,
+  type PortfolioImportPreview,
   type Account,
   type Exposure,
   type Holding,
@@ -20,8 +22,17 @@ import { button, muted, shell } from "./styles.ts";
 import { TsvExport } from "./tsv-export.tsx";
 
 type Portfolio = User["portfolio"];
+export type ImportResult = {
+  error?: string;
+  notice?: string;
+  source?: string;
+  preview?: PortfolioImportPreview;
+  changes?: PortfolioImportChange[];
+};
 
-export function DashboardPage(h: Handle<{ user: User; plan?: RebalancePlan }>) {
+export function DashboardPage(
+  h: Handle<{ user: User; plan?: RebalancePlan; importResult?: ImportResult }>,
+) {
   const portfolio = h.props.user.portfolio;
   const summaries = summarizePortfolio(portfolio);
   const total = portfolioTotal(portfolio);
@@ -97,7 +108,11 @@ export function DashboardPage(h: Handle<{ user: User; plan?: RebalancePlan }>) {
             validTargets={validTargets}
             canPlan={canPlan}
           />
-          <TsvExport content={portfolioTsv(portfolio)} />
+          <TsvExport
+            content={portfolioTsv(portfolio)}
+            jsonContent={JSON.stringify(portfolio, null, 2)}
+          />
+          <ImportSection result={h.props.importResult} />
           {h.props.plan?.kind === "rebalance" ? (
             <PlanResult plan={h.props.plan} accountName={accountName} />
           ) : null}
@@ -108,6 +123,94 @@ export function DashboardPage(h: Handle<{ user: User; plan?: RebalancePlan }>) {
         </section>
       </main>
     </Document>
+  );
+}
+
+function ImportSection(h: Handle<{ result?: ImportResult }>) {
+  const result = h.props.result;
+  return () => (
+    <section mix={panel} data-import-section>
+      <SectionHeading
+        step="Bring it back"
+        title="Import portfolio data"
+        detail="Paste a tab-separated export from this app or a JSON portfolio backup. Nothing changes until you confirm the preview."
+      />
+      {result?.error ? (
+        <p mix={warning} role="alert">
+          {result.error}
+        </p>
+      ) : null}
+      {result?.notice ? (
+        <p mix={success} role="status">
+          {result.notice}
+        </p>
+      ) : null}
+      {result?.preview ? (
+        <div mix={innerCard} data-import-preview>
+          <strong>Ready to replace your current portfolio</strong>
+          <p mix={css(muted)}>
+            {result.preview.format.toUpperCase()} import: {result.preview.accounts} accounts,{" "}
+            {result.preview.holdings} holdings, and {result.preview.exposures} exposures.
+          </p>
+          {result.preview.warnings.length ? (
+            <ul>
+              {result.preview.warnings.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p mix={css(muted)}>No validation warnings.</p>
+          )}
+          <strong>Changes to saved portfolio</strong>
+          {result.changes?.length ? (
+            <ul data-import-changes>
+              {result.changes.map((change) => (
+                <li key={`${change.kind}-${change.area}-${change.label}`}>
+                  <strong>
+                    {change.kind.toUpperCase()} {change.area}: {change.label}
+                  </strong>{" "}
+                  — {change.detail}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p mix={css(muted)}>No changes detected.</p>
+          )}
+          <form method="POST" action="/app">
+            <input type="hidden" name="intent" value="confirm-import" />
+            <textarea name="importData" hidden defaultValue={result.source} />
+            <button type="submit" mix={button({})}>
+              Replace current portfolio
+            </button>
+          </form>
+        </div>
+      ) : null}
+      <form method="POST" action="/app" mix={form}>
+        <input type="hidden" name="intent" value="preview-import" />
+        <label>
+          JSON or tab-separated data
+          <textarea
+            name="importData"
+            required
+            rows={12}
+            defaultValue={result?.source}
+            placeholder="Paste the contents of a Finance Planner .tsv or JSON backup"
+            mix={css({
+              width: "100%",
+              boxSizing: "border-box",
+              minHeight: "220px",
+              border: "1px solid #527061",
+              borderRadius: "10px",
+              padding: "12px",
+              background: "#10251d",
+              color: "#f1f6ed",
+              font: "13px ui-monospace, SFMono-Regular, Menlo, monospace",
+            })}
+          />
+        </label>
+        <button mix={button({ secondary: true })}>Preview import</button>
+      </form>
+    </section>
   );
 }
 
