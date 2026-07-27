@@ -1,5 +1,5 @@
 import { createController } from "remix/router";
-import { devAuthEnabled, userId } from "../middleware/auth-session.ts";
+import { bindUserSession, devAuthEnabled, userId } from "../middleware/auth-session.ts";
 import { routes } from "../routes.ts";
 import {
   createDeviceInvite,
@@ -31,10 +31,10 @@ function returnTo(value: string | null, fallback: string): string {
 export default createController(routes, {
   actions: {
     async home(c) {
-      return c.render(<HomePage signedIn={userId(c.session) != null} />);
+      return c.render(<HomePage signedIn={userId(c.session, c.request) != null} />);
     },
     async login(c) {
-      const id = userId(c.session);
+      const id = userId(c.session, c.request);
       const url = new URL(c.request.url);
       const destination = returnTo(url.searchParams.get("returnTo"), "/app");
       return c.render(
@@ -50,11 +50,11 @@ export default createController(routes, {
       if (!devAuthEnabled()) return new Response("Not Found", { status: 404 });
       const user = await ensureDevUser();
       c.session.regenerateId();
-      c.session.set("userId", user.id);
+      bindUserSession(c.session, c.request, user.id);
       return c.render(<DashboardPage user={user} />);
     },
     async account(c) {
-      const id = userId(c.session);
+      const id = userId(c.session, c.request);
       if (!id)
         return c.render(
           <AccessPage
@@ -142,7 +142,7 @@ export default createController(routes, {
       const inviteId = c.params.inviteId;
       if (!inviteId)
         return c.render(<InvitePage inviteId="" error="Invite not found" />, { status: 404 });
-      if (userId(c.session))
+      if (userId(c.session, c.request))
         return c.render(<InvitePage inviteId={inviteId} error={null} signedIn />);
       const invite = await getDeviceInvite(inviteId);
       if (!invite)
@@ -158,7 +158,7 @@ export default createController(routes, {
       return c.render(<InvitePage inviteId={inviteId} error={null} />);
     },
     async app(c) {
-      const id = userId(c.session);
+      const id = userId(c.session, c.request);
       if (!id)
         return c.render(
           <AccessPage
@@ -333,6 +333,7 @@ export default createController(routes, {
     },
     async logout(c) {
       c.session.unset("userId");
+      c.session.unset("sessionHost");
       c.session.regenerateId();
       return c.render(<HomePage signedIn={false} />);
     },
