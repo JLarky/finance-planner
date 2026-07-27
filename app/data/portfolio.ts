@@ -638,7 +638,15 @@ export function portfolioTsv(portfolio: Portfolio): string {
     row("Target allocation total", `${targetTotal(portfolio).toFixed(1)}%`),
     "",
     row("Accounts"),
-    row("Account", "Type", "Cash", "Allow purchases", "Allow sales", "Contributions expected"),
+    row(
+      "Account",
+      "Type",
+      "Cash",
+      "Allow purchases",
+      "Allow sales",
+      "Taxable sales allowed",
+      "Contributions expected",
+    ),
     ...portfolio.accounts.map((account) =>
       row(
         account.name,
@@ -646,6 +654,7 @@ export function portfolioTsv(portfolio: Portfolio): string {
         money(account.cash),
         account.allowPurchases ? "Yes" : "No",
         account.allowSales ? "Yes" : "No",
+        account.allowTaxableSales ? "Yes" : "No",
         account.expectContributions ? "Yes" : "No",
       ),
     ),
@@ -692,6 +701,246 @@ export function portfolioTsv(portfolio: Portfolio): string {
     ),
   ];
   return lines.join("\n");
+}
+
+export type PortfolioImportPreview = {
+  portfolio: Portfolio;
+  format: "json" | "tsv";
+  accounts: number;
+  holdings: number;
+  exposures: number;
+  warnings: string[];
+};
+
+export function parsePortfolioImport(
+  input: string,
+): { ok: true; preview: PortfolioImportPreview } | { ok: false; error: string } {
+  const source = input.trim();
+  if (!source) return { ok: false, error: "Paste a JSON or tab-separated export first." };
+  try {
+    if (source.startsWith("{")) return parseJsonImport(source);
+    return parseTsvImport(source);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Could not read this import.",
+    };
+  }
+}
+
+function parseJsonImport(source: string): { ok: true; preview: PortfolioImportPreview } {
+  let value: unknown;
+  try {
+    value = JSON.parse(source);
+  } catch {
+    throw new Error("The JSON is not valid. Check for missing commas or quotes.");
+  }
+  const portfolio = normalizeImportedPortfolio(value);
+  return createImportPreview(portfolio, "json");
+}
+
+function parseTsvImport(source: string): { ok: true; preview: PortfolioImportPreview } {
+  const rows = source
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.split("\t").map((cell) => cell.trim()));
+  let section = "";
+  let targetName = "Global Factor Mix";
+  const accounts: Account[] = [];
+  const holdings: Holding[] = [];
+  const pendingHoldings: Array<{
+    name: string;
+    accountName: string;
+    exposureName: string;
+    value: number;
+    canBuy: boolean;
+    canSell: boolean;
+  }> = [];
+  const exposures: Exposure[] = [];
+  const accountByName = new Map<string, Account>();
+  const exposureByName = new Map<string, Exposure>();
+
+  for (const row of rows) {
+    const first = row[0] ?? "";
+    if (!first) continue;
+    if (row.length === 1) {
+      section = ["Accounts", "Holdings", "Target allocation"].includes(first) ? first : "";
+      continue;
+    }
+    if (first === "Target portfolio") {
+      targetName = row[1] || targetName;
+      continue;
+    }
+    if (section === "Accounts" && first !== "Account") {
+      const hasTaxableSalesColumn = row.length >= 7;
+      const account = {
+        id: `import-account-${accounts.length + 1}`,
+        name: first,
+        type: accountTypeFromImport(row[1] ?? ""),
+        cash: importNumber(row[2], "account cash"),
+        allowPurchases: importBoolean(row[3], "account purchases"),
+        allowSales: importBoolean(row[4], "account sales"),
+        allowTaxableSales: hasTaxableSalesColumn ? importBoolean(row[5], "taxable sales") : false,
+        expectContributions: importBoolean(
+          hasTaxableSalesColumn ? row[6] : row[5],
+          "contributions expected",
+        ),
+      } satisfies Account;
+      if (accountByName.has(account.name))
+        throw new Error(`Account names must be unique: ${account.name}.`);
+      accountByName.set(account.name, account);
+      accounts.push(account);
+    } else if (section === "Holdings" && first !== "Fund") {
+      pendingHoldings.push({
+        name: first,
+        accountName: row[1] ?? "",
+        exposureName: row[2] ?? "",
+        value: importNumber(row[3], "holding value"),
+        canBuy: importBoolean(row[4], "holding purchases"),
+        canSell: importBoolean(row[5], "holding sales"),
+      });
+    } else if (section === "Target allocation" && first !== "Exposure") {
+      const exposure = {
+        id: `import-exposure-${exposures.length + 1}`,
+        name: first,
+        targetPercent: importNumber(row[1], "target percentage"),
+      };
+      if (exposureByName.has(exposure.name))
+        throw new Error(`Exposure names must be unique: ${exposure.name}.`);
+      exposureByName.set(exposure.name, exposure);
+      exposures.push(exposure);
+    }
+  }
+  if (!accounts.length) throw new Error("The TSV does not contain an Accounts section with data.");
+  if (!exposures.length)
+    throw new Error("The TSV does not contain a Target allocation section with data.");
+  for (const pending of pendingHoldings) {
+    const account = accountByName.get(pending.accountName);
+    const exposure = exposureByName.get(pending.exposureName);
+    if (!account) throw new Error(`Holding references an unknown account: ${pending.accountName}.`);
+    if (!exposure)
+      throw new Error(`Holding references an unknown exposure: ${pending.exposureName}.`);
+    holdings.push({
+      id: `import-holding-${holdings.length + 1}`,
+      accountId: account.id,
+      name: pending.name,
+      value: pending.value,
+      exposureId: exposure.id,
+      canBuy: pending.canBuy,
+      canSell: pending.canSell,
+    });
+  }
+  return createImportPreview(
+    {
+      accounts,
+      holdings,
+      exposures,
+      targetName,
+      relativeThreshold: 0.2,
+      minimumTrade: 50,
+    },
+    "tsv",
+  );
+}
+
+function createImportPreview(
+  portfolio: Portfolio,
+  format: "json" | "tsv",
+): { ok: true; preview: PortfolioImportPreview } {
+  const warnings: string[] = [];
+  const total = targetTotal(portfolio);
+  if (Math.abs(total - 100) >= 0.001)
+    warnings.push(`Target allocations total ${total.toFixed(1)}%, not 100%.`);
+  if (!portfolio.holdings.length)
+    warnings.push("No holdings were imported; add holdings before planning a rebalance.");
+  return {
+    ok: true,
+    preview: {
+      portfolio,
+      format,
+      accounts: portfolio.accounts.length,
+      holdings: portfolio.holdings.length,
+      exposures: portfolio.exposures.length,
+      warnings,
+    },
+  };
+}
+
+function normalizeImportedPortfolio(value: unknown): Portfolio {
+  if (!value || typeof value !== "object") throw new Error("JSON must contain a portfolio object.");
+  const raw = value as Partial<Portfolio>;
+  if (
+    !Array.isArray(raw.accounts) ||
+    !Array.isArray(raw.holdings) ||
+    !Array.isArray(raw.exposures)
+  ) {
+    throw new Error("JSON must include accounts, holdings, and exposures arrays.");
+  }
+  if (typeof raw.targetName !== "string") throw new Error("JSON must include a targetName string.");
+  const portfolio = normalizePortfolio(raw as Portfolio);
+  for (const account of portfolio.accounts) {
+    if (!account.id || !account.name) throw new Error("Every account needs an id and name.");
+    if (!Number.isFinite(account.cash) || account.cash < 0)
+      throw new Error(`Invalid cash for ${account.name}.`);
+  }
+  for (const exposure of portfolio.exposures) {
+    if (
+      !exposure.id ||
+      !exposure.name ||
+      !Number.isFinite(exposure.targetPercent) ||
+      exposure.targetPercent < 0
+    ) {
+      throw new Error("Every exposure needs an id, name, and non-negative target percentage.");
+    }
+  }
+  const accountIds = new Set(portfolio.accounts.map((account) => account.id));
+  const exposureIds = new Set(portfolio.exposures.map((exposure) => exposure.id));
+  for (const holding of portfolio.holdings) {
+    if (
+      !holding.id ||
+      !holding.name ||
+      !accountIds.has(holding.accountId) ||
+      !exposureIds.has(holding.exposureId)
+    ) {
+      throw new Error(
+        `Holding ${holding.name || "(unnamed)"} references an unknown account or exposure.`,
+      );
+    }
+    if (!Number.isFinite(holding.value) || holding.value < 0)
+      throw new Error(`Invalid value for ${holding.name}.`);
+  }
+  return portfolio;
+}
+
+function accountTypeFromImport(value: string): AccountType {
+  const labels: Record<string, AccountType> = {
+    "401(k)": "401k",
+    "Traditional IRA": "traditional-ira",
+    "Roth IRA": "roth-ira",
+    "Taxable brokerage": "taxable",
+    "Other tax-advantaged": "other-tax-advantaged",
+    "Other taxable": "other-taxable",
+  };
+  const type = labels[value] ?? value;
+  if (
+    !(Object.keys(labels).includes(type) || Object.values(labels).includes(type as AccountType))
+  ) {
+    throw new Error(`Unknown account type: ${value}.`);
+  }
+  return type as AccountType;
+}
+
+function importBoolean(value: string | undefined, label: string): boolean {
+  if (value === "Yes") return true;
+  if (value === "No") return false;
+  throw new Error(`Expected Yes or No for ${label}.`);
+}
+
+function importNumber(value: string | undefined, label: string): number {
+  const normalized = (value ?? "").replace(/[,$%]/g, "").replace(/^\+/, "").trim();
+  const result = Number(normalized);
+  if (!Number.isFinite(result) || result < 0) throw new Error(`Invalid ${label}: ${value ?? ""}.`);
+  return result;
 }
 
 function tsvValue(value: unknown): string {

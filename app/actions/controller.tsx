@@ -13,6 +13,7 @@ import {
 } from "../data/users.ts";
 import {
   isTaxableAccount,
+  parsePortfolioImport,
   recommendContribution,
   recommendRebalance,
   type AccountType,
@@ -135,6 +136,30 @@ export default createController(routes, {
       if (c.request.method === "POST") {
         const form = await c.request.formData();
         const intent = text(form, "intent");
+        if (intent === "preview-import" || intent === "confirm-import") {
+          const source = text(form, "importData");
+          const parsed = parsePortfolioImport(source);
+          if (!parsed.ok) {
+            return c.render(
+              <DashboardPage user={user} importResult={{ error: parsed.error, source }} />,
+            );
+          }
+          if (intent === "preview-import") {
+            return c.render(
+              <DashboardPage user={user} importResult={{ preview: parsed.preview, source }} />,
+            );
+          }
+          user.portfolio = parsed.preview.portfolio;
+          await saveUser(user);
+          return c.render(
+            <DashboardPage
+              user={user}
+              importResult={{
+                notice: `Imported ${parsed.preview.accounts} accounts, ${parsed.preview.holdings} holdings, and ${parsed.preview.exposures} exposures.`,
+              }}
+            />,
+          );
+        }
         const portfolio = user.portfolio;
         if (intent === "add-account") {
           const name = text(form, "name").trim();
