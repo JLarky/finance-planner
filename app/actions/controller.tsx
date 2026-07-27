@@ -13,6 +13,7 @@ import {
 } from "../data/users.ts";
 import {
   isTaxableAccount,
+  comparePortfolios,
   parsePortfolioImport,
   recommendContribution,
   recommendRebalance,
@@ -146,7 +147,14 @@ export default createController(routes, {
           }
           if (intent === "preview-import") {
             return c.render(
-              <DashboardPage user={user} importResult={{ preview: parsed.preview, source }} />,
+              <DashboardPage
+                user={user}
+                importResult={{
+                  preview: parsed.preview,
+                  source,
+                  changes: comparePortfolios(user.portfolio, parsed.preview.portfolio),
+                }}
+              />,
             );
           }
           user.portfolio = parsed.preview.portfolio;

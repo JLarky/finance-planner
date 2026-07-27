@@ -9,6 +9,7 @@ import {
   portfolioTotal,
   summarizePortfolio,
   targetTotal,
+  type PortfolioImportChange,
   type PortfolioImportPreview,
   type Account,
   type Exposure,
@@ -26,6 +27,7 @@ export type ImportResult = {
   notice?: string;
   source?: string;
   preview?: PortfolioImportPreview;
+  changes?: PortfolioImportChange[];
 };
 
 export function DashboardPage(
@@ -158,6 +160,21 @@ function ImportSection(h: Handle<{ result?: ImportResult }>) {
             </ul>
           ) : (
             <p mix={css(muted)}>No validation warnings.</p>
+          )}
+          <strong>Changes to saved portfolio</strong>
+          {result.changes?.length ? (
+            <ul data-import-changes>
+              {result.changes.map((change) => (
+                <li key={`${change.kind}-${change.area}-${change.label}`}>
+                  <strong>
+                    {change.kind.toUpperCase()} {change.area}: {change.label}
+                  </strong>{" "}
+                  — {change.detail}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p mix={css(muted)}>No changes detected.</p>
           )}
           <form method="POST" action="/app">
             <input type="hidden" name="intent" value="confirm-import" />

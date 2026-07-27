@@ -712,6 +712,125 @@ export type PortfolioImportPreview = {
   warnings: string[];
 };
 
+export type PortfolioImportChange = {
+  kind: "added" | "removed" | "changed";
+  area: "account" | "holding" | "exposure" | "portfolio";
+  label: string;
+  detail: string;
+};
+
+export function comparePortfolios(
+  current: Portfolio,
+  incoming: Portfolio,
+): PortfolioImportChange[] {
+  const changes: PortfolioImportChange[] = [];
+  const currentExposureNames = new Map(
+    current.exposures.map((exposure) => [exposure.id, exposure.name]),
+  );
+  const incomingExposureNames = new Map(
+    incoming.exposures.map((exposure) => [exposure.id, exposure.name]),
+  );
+  const currentAccountNames = new Map(
+    current.accounts.map((account) => [account.id, account.name]),
+  );
+  const incomingAccountNames = new Map(
+    incoming.accounts.map((account) => [account.id, account.name]),
+  );
+
+  addRecordChanges(
+    changes,
+    "account",
+    current.accounts,
+    incoming.accounts,
+    (account) => account.name,
+    accountDetails,
+  );
+  addRecordChanges(
+    changes,
+    "exposure",
+    current.exposures,
+    incoming.exposures,
+    (exposure) => exposure.name,
+    (exposure) => `${exposure.targetPercent.toFixed(1)}% target`,
+  );
+  addRecordChanges(
+    changes,
+    "holding",
+    current.holdings,
+    incoming.holdings,
+    (holding) =>
+      `${currentAccountNames.get(holding.accountId) ?? "Unknown account"} / ${holding.name}`,
+    (holding) =>
+      `${money(holding.value)}, ${currentExposureNames.get(holding.exposureId) ?? "Unmapped"}, purchases ${yesNo(holding.canBuy)}, sales ${yesNo(holding.canSell)}`,
+    (holding) =>
+      `${incomingAccountNames.get(holding.accountId) ?? "Unknown account"} / ${holding.name}`,
+    (holding) =>
+      `${money(holding.value)}, ${incomingExposureNames.get(holding.exposureId) ?? "Unmapped"}, purchases ${yesNo(holding.canBuy)}, sales ${yesNo(holding.canSell)}`,
+  );
+
+  if (current.targetName !== incoming.targetName)
+    changes.push({
+      kind: "changed",
+      area: "portfolio",
+      label: "Target name",
+      detail: `${current.targetName} → ${incoming.targetName}`,
+    });
+  if (current.relativeThreshold !== incoming.relativeThreshold)
+    changes.push({
+      kind: "changed",
+      area: "portfolio",
+      label: "Relative tolerance",
+      detail: `${current.relativeThreshold} → ${incoming.relativeThreshold}`,
+    });
+  if (current.minimumTrade !== incoming.minimumTrade)
+    changes.push({
+      kind: "changed",
+      area: "portfolio",
+      label: "Minimum trade",
+      detail: `${money(current.minimumTrade)} → ${money(incoming.minimumTrade)}`,
+    });
+  return changes;
+}
+
+function addRecordChanges<T>(
+  changes: PortfolioImportChange[],
+  area: PortfolioImportChange["area"],
+  current: T[],
+  incoming: T[],
+  currentKey: (value: T) => string,
+  details: (value: T) => string,
+  incomingKey: (value: T) => string = currentKey,
+  incomingDetails: (value: T) => string = details,
+) {
+  const currentByKey = new Map(current.map((value) => [currentKey(value), value]));
+  const incomingByKey = new Map(incoming.map((value) => [incomingKey(value), value]));
+  for (const [key, value] of incomingByKey) {
+    const oldValue = currentByKey.get(key);
+    if (!oldValue) {
+      changes.push({ kind: "added", area, label: key, detail: incomingDetails(value) });
+    } else if (details(oldValue) !== incomingDetails(value)) {
+      changes.push({
+        kind: "changed",
+        area,
+        label: key,
+        detail: `${details(oldValue)} → ${incomingDetails(value)}`,
+      });
+    }
+  }
+  for (const [key, value] of currentByKey) {
+    if (!incomingByKey.has(key))
+      changes.push({ kind: "removed", area, label: key, detail: details(value) });
+  }
+}
+
+function accountDetails(account: Account): string {
+  return `${accountLabel(account.type)}, cash ${money(account.cash)}, purchases ${yesNo(account.allowPurchases)}, sales ${yesNo(account.allowSales)}, taxable sales ${yesNo(account.allowTaxableSales)}, contributions ${yesNo(account.expectContributions)}`;
+}
+
+function yesNo(value: boolean): string {
+  return value ? "yes" : "no";
+}
+
 export function parsePortfolioImport(
   input: string,
 ): { ok: true; preview: PortfolioImportPreview } | { ok: false; error: string } {

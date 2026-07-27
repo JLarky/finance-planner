@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createDefaultPortfolio,
+  comparePortfolios,
   portfolioTotal,
   portfolioTsv,
   parsePortfolioImport,
@@ -94,6 +95,20 @@ void test("portfolio imports its TSV and JSON exports", () => {
     assert.equal(imported.preview.accounts, 1);
     assert.equal(imported.preview.holdings, 1);
   }
+});
+
+void test("portfolio import preview compares semantic changes without using ids", () => {
+  const value = portfolio();
+  const imported = parsePortfolioImport(portfolioTsv(value));
+  if (!imported.ok) throw new Error(imported.error);
+  assert.deepEqual(comparePortfolios(value, imported.preview.portfolio), []);
+
+  imported.preview.portfolio.accounts[0]!.cash = 250;
+  const changes = comparePortfolios(value, imported.preview.portfolio);
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0]?.kind, "changed");
+  assert.equal(changes[0]?.area, "account");
+  assert.match(changes[0]?.detail ?? "", /cash \$100.*cash \$250/);
 });
 
 void test("portfolio import rejects malformed input", () => {
