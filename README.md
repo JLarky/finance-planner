@@ -47,3 +47,6 @@ During Node development, the local fallback is a JSON file rather than a real da
 On Deno Deploy, the runtime adapter calls `Deno.openKv()` automatically. Set `DENO_KV_URL` only when using a specific remote KV database during development.
 
 Passkeys are bound to the exact hostname, so register and sign in from the same deployed hostname.
+Session cookies are host-only and also bind their signed user session to the exact hostname that
+created it. This prevents a cookie copied or mis-scoped between preview deployments from being
+used against another deployment; open the preview's sign-in page and authenticate there instead.
