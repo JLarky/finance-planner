@@ -100,6 +100,7 @@ export default createController(routes.api.auth, {
         ...options,
         excludeCredentials: user.passkeys.map((passkey) => ({
           id: passkey.credentialId,
+          type: "public-key" as const,
           transports: passkey.transports,
         })),
       });
