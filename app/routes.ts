@@ -2,6 +2,7 @@ import { post, route } from "remix/routes";
 
 export const routes = route({
   home: "/",
+  health: "/health",
   login: "/login",
   app: "/app",
   account: "/account",
