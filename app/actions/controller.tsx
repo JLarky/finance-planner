@@ -223,7 +223,7 @@ export default createController(routes, {
             <DashboardPage
               user={user}
               importResult={{
-                notice: `Imported ${parsed.preview.accounts} accounts, ${parsed.preview.holdings} holdings, and ${parsed.preview.exposures} exposures.`,
+                notice: `Imported ${parsed.preview.accounts} accounts, ${parsed.preview.holdings} holdings, ${parsed.preview.availableInvestments} available investments, and ${parsed.preview.exposures} exposures.`,
               }}
             />,
           );
@@ -261,7 +261,10 @@ export default createController(routes, {
           }
         } else if (intent === "remove-account") {
           const accountId = text(form, "accountId");
-          if (!portfolio.holdings.some((holding) => holding.accountId === accountId)) {
+          if (
+            !portfolio.holdings.some((holding) => holding.accountId === accountId) &&
+            !portfolio.availableInvestments.some((investment) => investment.accountId === accountId)
+          ) {
             portfolio.accounts = portfolio.accounts.filter((account) => account.id !== accountId);
           }
         } else if (intent === "add-holding") {
@@ -306,6 +309,50 @@ export default createController(routes, {
         } else if (intent === "remove-holding") {
           const holdingId = text(form, "holdingId");
           portfolio.holdings = portfolio.holdings.filter((holding) => holding.id !== holdingId);
+        } else if (intent === "add-available-investment") {
+          const name = text(form, "name").trim();
+          const accountId = text(form, "accountId");
+          const exposureId = text(form, "exposureId");
+          if (
+            name &&
+            portfolio.accounts.some((account) => account.id === accountId) &&
+            portfolio.exposures.some((exposure) => exposure.id === exposureId)
+          ) {
+            portfolio.availableInvestments.push({
+              id: crypto.randomUUID(),
+              accountId,
+              name,
+              exposureId,
+              preferred: form.get("preferred") === "on",
+              canBuy: form.get("canBuy") === "on",
+              canSell: form.get("canSell") === "on",
+            });
+          }
+        } else if (intent === "update-available-investment") {
+          const investment = portfolio.availableInvestments.find(
+            (item) => item.id === text(form, "availableInvestmentId"),
+          );
+          const name = text(form, "name").trim();
+          const accountId = text(form, "accountId");
+          const exposureId = text(form, "exposureId");
+          if (
+            investment &&
+            name &&
+            portfolio.accounts.some((account) => account.id === accountId) &&
+            portfolio.exposures.some((exposure) => exposure.id === exposureId)
+          ) {
+            investment.name = name;
+            investment.accountId = accountId;
+            investment.exposureId = exposureId;
+            investment.preferred = form.get("preferred") === "on";
+            investment.canBuy = form.get("canBuy") === "on";
+            investment.canSell = form.get("canSell") === "on";
+          }
+        } else if (intent === "remove-available-investment") {
+          const investmentId = text(form, "availableInvestmentId");
+          portfolio.availableInvestments = portfolio.availableInvestments.filter(
+            (investment) => investment.id !== investmentId,
+          );
         } else if (intent === "save-targets") {
           saveTargetFields(portfolio, form);
         } else if (intent === "add-exposure") {
@@ -322,7 +369,10 @@ export default createController(routes, {
           const exposureId = intent.slice("remove-exposure:".length);
           if (
             portfolio.exposures.length > 1 &&
-            !portfolio.holdings.some((holding) => holding.exposureId === exposureId)
+            !portfolio.holdings.some((holding) => holding.exposureId === exposureId) &&
+            !portfolio.availableInvestments.some(
+              (investment) => investment.exposureId === exposureId,
+            )
           ) {
             portfolio.exposures = portfolio.exposures.filter(
               (exposure) => exposure.id !== exposureId,

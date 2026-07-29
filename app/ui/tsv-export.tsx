@@ -120,6 +120,26 @@ export const TsvExport = clientEntry(
             })}
           />
         </details>
+        <details mix={css({ marginTop: "12px" })}>
+          <summary>Preview JSON backup</summary>
+          <textarea
+            readOnly
+            value={h.props.jsonContent}
+            aria-label="JSON backup preview"
+            mix={css({
+              width: "100%",
+              minHeight: "180px",
+              marginTop: "12px",
+              boxSizing: "border-box",
+              background: "#0b1b15",
+              color: "#d4e1d8",
+              border: "1px solid #527061",
+              borderRadius: "10px",
+              padding: "12px",
+              font: "13px ui-monospace, SFMono-Regular, Menlo, monospace",
+            })}
+          />
+        </details>
       </section>
     );
   },
