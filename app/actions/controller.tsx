@@ -24,12 +24,29 @@ import { DashboardPage } from "../ui/dashboard-page.tsx";
 import { AccountPage } from "../ui/account-page.tsx";
 import { InvitePage } from "../ui/invite-page.tsx";
 import { AccessPage } from "../ui/access-page.tsx";
+import { KV_NAMESPACE, kvKey, openKv, readLocal } from "../data/kv.ts";
 
 function returnTo(value: string | null, fallback: string): string {
   return value?.startsWith("/") && !value.startsWith("//") ? value : fallback;
 }
 export default createController(routes, {
   actions: {
+    async health() {
+      try {
+        const kv = await openKv();
+        if (kv) {
+          await kv.get(kvKey("health"));
+          return healthResponse({ ok: true, storage: "deno-kv", namespace: KV_NAMESPACE });
+        }
+        await readLocal();
+        return healthResponse({ ok: true, storage: "local-json" });
+      } catch {
+        return healthResponse(
+          { ok: false, storage: "unavailable", error: "Configured storage is unavailable" },
+          503,
+        );
+      }
+    },
     async home(c) {
       return c.render(<HomePage signedIn={userId(c.session, c.request) != null} />);
     },
@@ -339,6 +356,13 @@ export default createController(routes, {
     },
   },
 });
+
+function healthResponse(body: Record<string, unknown>, status = 200): Response {
+  return Response.json(body, {
+    status,
+    headers: { "cache-control": "no-store" },
+  });
+}
 
 function text(form: FormData, key: string): string {
   const value = form.get(key);
