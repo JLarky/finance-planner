@@ -34,7 +34,7 @@ Open the URL printed by `boo peek finance-planner-dev` (currently [http://localh
 
 See [`local-dev.md`](./local-dev.md) for the isolated `boo` workflow, local auth shortcut, agent-browser testing, and per-server data setup.
 
-During Node development, the local fallback is a JSON file rather than a real database. By default it is `data/app-store.local.json`, relative to the worktree, and is ignored by git. Set `FINANCE_PLANNER_DATA_PATH` to a unique path when running more than one server from the same worktree; each server should use a different file. Deno deployments use the KV database selected by `DENO_KV_URL` instead.
+During Node development, the local fallback is a JSON file rather than a real database. By default it is `data/app-store.local.json`, relative to the worktree, and is ignored by git. Set `FINANCE_PLANNER_DATA_PATH` to a unique path when running more than one server from the same worktree; each server should use a different file. Deno deployments use the KV database selected by `DENO_KV_URL` instead. Finance Planner stores all managed KV records below the `finance-planner` key namespace so it can share a production database with other applications without colliding with their records.
 
 ## Deno Deploy
 

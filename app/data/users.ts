@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { openKv, readLocal, writeLocal } from "./kv.ts";
+import { kvKey, openKv, readLocal, writeLocal } from "./kv.ts";
 import { createDefaultPortfolio, normalizePortfolio, type Portfolio } from "./portfolio.ts";
 
 export type Passkey = {
@@ -29,7 +29,7 @@ const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export async function getUser(id: string): Promise<User | null> {
   const kv = await openKv();
   if (kv) {
-    const user = (await kv.get<User>(["user", id])).value;
+    const user = (await kv.get<User>(kvKey("user", id))).value;
     return user
       ? {
           ...user,
@@ -50,7 +50,7 @@ export async function getUser(id: string): Promise<User | null> {
 export async function saveUser(user: User) {
   const kv = await openKv();
   if (kv) {
-    await kv.set(["user", user.id], user);
+    await kv.set(kvKey("user", user.id), user);
     return;
   }
   const store = await readLocal();
@@ -59,7 +59,7 @@ export async function saveUser(user: User) {
 }
 export async function findUserId(credentialId: string): Promise<string | null> {
   const kv = await openKv();
-  if (kv) return (await kv.get<string>(["cred", credentialId])).value;
+  if (kv) return (await kv.get<string>(kvKey("cred", credentialId))).value;
   const store = await readLocal();
   return (
     (
@@ -80,7 +80,7 @@ export async function createUser(passkey: Passkey, id?: string) {
   };
   await saveUser(user);
   const kv = await openKv();
-  if (kv) await kv.set(["cred", passkey.credentialId], user.id);
+  if (kv) await kv.set(kvKey("cred", passkey.credentialId), user.id);
   return user;
 }
 export async function updateCounter(user: User, credentialId: string, counter: number) {
@@ -97,7 +97,7 @@ export async function addPasskeyToUser(userId: string, passkey: Passkey): Promis
   const next = { ...user, passkeys: [...user.passkeys, passkey] };
   await saveUser(next);
   const kv = await openKv();
-  if (kv) await kv.set(["cred", passkey.credentialId], userId);
+  if (kv) await kv.set(kvKey("cred", passkey.credentialId), userId);
   return next;
 }
 
@@ -113,13 +113,17 @@ export async function createDeviceInvite(userId: string): Promise<DeviceInvite |
   await saveUser({ ...user, deviceInvites: [...user.deviceInvites, invite] });
   const kv = await openKv();
   if (kv)
-    await kv.set(["invite", invite.id], { userId, expiresAt: invite.expiresAt, claimedAt: null });
+    await kv.set(kvKey("invite", invite.id), {
+      userId,
+      expiresAt: invite.expiresAt,
+      claimedAt: null,
+    });
   return invite;
 }
 
 export async function getDeviceInvite(inviteId: string): Promise<InviteLookup | null> {
   const kv = await openKv();
-  if (kv) return (await kv.get<InviteLookup>(["invite", inviteId])).value;
+  if (kv) return (await kv.get<InviteLookup>(kvKey("invite", inviteId))).value;
   const store = await readLocal();
   for (const candidate of Object.values(store.users)) {
     const user = candidate as User;
@@ -149,7 +153,7 @@ export async function claimDeviceInvite(
   };
   await saveUser(next);
   const kv = await openKv();
-  if (kv) await kv.set(["invite", inviteId], { ...invite, claimedAt });
+  if (kv) await kv.set(kvKey("invite", inviteId), { ...invite, claimedAt });
   return { ok: true, user: next };
 }
 
@@ -166,7 +170,7 @@ export async function revokeDeviceInvite(
     deviceInvites: user.deviceInvites.filter((entry) => entry.id !== inviteId),
   });
   const kv = await openKv();
-  if (kv) await kv.delete?.(["invite", inviteId]);
+  if (kv) await kv.delete?.(kvKey("invite", inviteId));
   return { ok: true };
 }
 

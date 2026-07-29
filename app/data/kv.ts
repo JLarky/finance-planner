@@ -7,6 +7,10 @@ export type Kv = {
   set(key: readonly string[], value: unknown): Promise<unknown>;
   delete?(key: readonly string[]): Promise<unknown>;
 };
+export const KV_NAMESPACE = "finance-planner";
+export function kvKey(...parts: string[]): readonly string[] {
+  return [KV_NAMESPACE, ...parts];
+}
 type DenoLike = { openKv(url?: string): Promise<Kv> };
 const localPath = process.env.FINANCE_PLANNER_DATA_PATH
   ? path.resolve(process.cwd(), process.env.FINANCE_PLANNER_DATA_PATH)
