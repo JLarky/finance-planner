@@ -12,6 +12,7 @@ import {
   type PortfolioImportChange,
   type PortfolioImportPreview,
   type Account,
+  type AvailableInvestment,
   type Exposure,
   type Holding,
   type RebalancePlan,
@@ -40,7 +41,8 @@ export function DashboardPage(
   const validTargets = Math.abs(targetTotal(portfolio) - 100) < 0.001;
   const hasAccounts = portfolio.accounts.length > 0;
   const hasHoldings = portfolio.holdings.length > 0;
-  const canPlan = validTargets && hasAccounts && hasHoldings;
+  const canPlan =
+    validTargets && hasAccounts && (hasHoldings || portfolio.availableInvestments.length > 0);
   const accountName = new Map(portfolio.accounts.map((account) => [account.id, account.name]));
   return () => (
     <Document title="Your plan · Finance Planner">
@@ -72,9 +74,14 @@ export function DashboardPage(
           <div mix={progressGrid}>
             <ProgressStep number="1" label="Accounts" complete={hasAccounts} />
             <ProgressStep number="2" label="Holdings" complete={hasHoldings} />
-            <ProgressStep number="3" label="Target" complete={validTargets} />
-            <ProgressStep number="4" label="Compare" complete={total > 0 && validTargets} />
-            <ProgressStep number="5" label="Plan" complete={Boolean(h.props.plan)} />
+            <ProgressStep
+              number="3"
+              label="Available"
+              complete={portfolio.availableInvestments.length > 0}
+            />
+            <ProgressStep number="4" label="Target" complete={validTargets} />
+            <ProgressStep number="5" label="Compare" complete={total > 0 && validTargets} />
+            <ProgressStep number="6" label="Plan" complete={Boolean(h.props.plan)} />
           </div>
 
           <div mix={metricGrid}>
@@ -95,9 +102,15 @@ export function DashboardPage(
             holdings={portfolio.holdings}
             exposures={portfolio.exposures}
           />
+          <AvailableInvestmentsSection
+            accounts={portfolio.accounts}
+            availableInvestments={portfolio.availableInvestments}
+            exposures={portfolio.exposures}
+          />
           <TargetSection
             exposures={portfolio.exposures}
             holdings={portfolio.holdings}
+            availableInvestments={portfolio.availableInvestments}
             total={targetTotal(portfolio)}
             targetName={portfolio.targetName}
           />
@@ -150,7 +163,8 @@ function ImportSection(h: Handle<{ result?: ImportResult }>) {
           <strong>Ready to replace your current portfolio</strong>
           <p mix={css(muted)}>
             {result.preview.format.toUpperCase()} import: {result.preview.accounts} accounts,{" "}
-            {result.preview.holdings} holdings, and {result.preview.exposures} exposures.
+            {result.preview.holdings} holdings, {result.preview.availableInvestments} available
+            investments, and {result.preview.exposures} exposures.
           </p>
           {result.preview.warnings.length ? (
             <ul>
@@ -554,10 +568,178 @@ function HoldingFields(
   );
 }
 
+function AvailableInvestmentsSection(
+  h: Handle<{
+    accounts: Account[];
+    availableInvestments: AvailableInvestment[];
+    exposures: Exposure[];
+  }>,
+) {
+  return () => (
+    <section mix={panel}>
+      <SectionHeading
+        step="Step 3"
+        title="Available investments"
+        detail="Tell the planner which funds can implement each exposure in each account. Preferred funds are selected first, including funds you do not currently own."
+      />
+      {h.props.accounts.length === 0 ? (
+        <EmptyState
+          title="Add an account first"
+          detail="An available investment must belong to an account."
+        />
+      ) : (
+        <div mix={sectionColumns}>
+          <div>
+            {h.props.availableInvestments.length === 0 ? (
+              <EmptyState
+                title="No available investments yet"
+                detail="Add purchasable funds here when an account can buy a fund that is not currently held."
+              />
+            ) : (
+              <div mix={cardList}>
+                {h.props.availableInvestments.map((investment) => (
+                  <AvailableInvestmentEditor
+                    key={investment.id}
+                    investment={investment}
+                    accounts={h.props.accounts}
+                    exposures={h.props.exposures}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          <AddAvailableInvestmentForm accounts={h.props.accounts} exposures={h.props.exposures} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AvailableInvestmentEditor(
+  h: Handle<{
+    investment: AvailableInvestment;
+    accounts: Account[];
+    exposures: Exposure[];
+  }>,
+) {
+  const investment = h.props.investment;
+  const account = h.props.accounts.find((item) => item.id === investment.accountId);
+  const exposure = h.props.exposures.find((item) => item.id === investment.exposureId);
+  return () => (
+    <details mix={editorCard}>
+      <summary mix={summaryRow}>
+        <span>
+          <strong>{investment.name}</strong>
+          <small>
+            {account?.name ?? "Unknown account"} · {exposure?.name ?? "Unmapped"}
+            {investment.preferred ? " · Preferred" : ""}
+          </small>
+        </span>
+      </summary>
+      <form method="POST" action="/app" mix={form}>
+        <input type="hidden" name="availableInvestmentId" value={investment.id} />
+        <AvailableInvestmentFields
+          investment={investment}
+          accounts={h.props.accounts}
+          exposures={h.props.exposures}
+        />
+        <div mix={buttonRow}>
+          <button type="submit" name="intent" value="update-available-investment" mix={button({})}>
+            Save investment
+          </button>
+          <button
+            type="submit"
+            name="intent"
+            value="remove-available-investment"
+            mix={dangerButton}
+          >
+            Remove
+          </button>
+        </div>
+      </form>
+    </details>
+  );
+}
+
+function AddAvailableInvestmentForm(h: Handle<{ accounts: Account[]; exposures: Exposure[] }>) {
+  return () => (
+    <div mix={innerCard}>
+      <h3 mix={subheading}>Add available investment</h3>
+      <form method="POST" action="/app" mix={form}>
+        <input type="hidden" name="intent" value="add-available-investment" />
+        <AvailableInvestmentFields accounts={h.props.accounts} exposures={h.props.exposures} />
+        <button mix={button({})}>Add investment</button>
+      </form>
+    </div>
+  );
+}
+
+function AvailableInvestmentFields(
+  h: Handle<{
+    investment?: AvailableInvestment;
+    accounts: Account[];
+    exposures: Exposure[];
+  }>,
+) {
+  return () => (
+    <>
+      <div mix={formGrid}>
+        <label>
+          Fund ticker or name
+          <input
+            name="name"
+            required
+            placeholder="Fund name or ticker"
+            defaultValue={h.props.investment?.name}
+          />
+        </label>
+        <label>
+          Account
+          <select name="accountId">
+            {h.props.accounts.map((account) => (
+              <option
+                key={account.id}
+                value={account.id}
+                selected={h.props.investment?.accountId === account.id}
+              >
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Exposure
+          <select name="exposureId">
+            {h.props.exposures.map((exposure) => (
+              <option
+                key={exposure.id}
+                value={exposure.id}
+                selected={h.props.investment?.exposureId === exposure.id}
+              >
+                {exposure.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div mix={checkGrid}>
+        <Check
+          name="preferred"
+          label="Preferred"
+          checked={h.props.investment?.preferred ?? false}
+        />
+        <Check name="canBuy" label="Allow purchases" checked={h.props.investment?.canBuy ?? true} />
+        <Check name="canSell" label="Allow sales" checked={h.props.investment?.canSell ?? true} />
+      </div>
+    </>
+  );
+}
+
 function TargetSection(
   h: Handle<{
     exposures: Exposure[];
     holdings: Holding[];
+    availableInvestments: AvailableInvestment[];
     total: number;
     targetName: string;
   }>,
@@ -566,7 +748,7 @@ function TargetSection(
   return () => (
     <section mix={panel}>
       <SectionHeading
-        step="Step 3"
+        step="Step 4"
         title="Define target portfolio"
         detail="Rename, reorder, remove, or add exposures. Target percentages must total 100%."
       />
@@ -583,7 +765,11 @@ function TargetSection(
         </label>
         <div mix={targetList}>
           {h.props.exposures.map((exposure, index) => {
-            const inUse = h.props.holdings.some((holding) => holding.exposureId === exposure.id);
+            const inUse =
+              h.props.holdings.some((holding) => holding.exposureId === exposure.id) ||
+              h.props.availableInvestments?.some(
+                (investment) => investment.exposureId === exposure.id,
+              );
             return (
               <div key={exposure.id} mix={targetRow}>
                 <label>
@@ -677,7 +863,7 @@ function ComparisonSection(
     <section mix={panel}>
       <div mix={sectionHeader}>
         <SectionHeading
-          step="Step 4"
+          step="Step 5"
           title="Portfolio comparison"
           detail="Combined portfolio is primary. Cash stays in the denominator until invested."
         />
@@ -761,7 +947,7 @@ function ContributionSection(h: Handle<{ accounts: Account[]; canPlan: boolean; 
   return () => (
     <section mix={panel}>
       <SectionHeading
-        step="Step 5"
+        step="Step 6"
         title="Plan contributions"
         detail="Allocate new money in one destination account without selling existing holdings."
       />

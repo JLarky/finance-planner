@@ -28,11 +28,22 @@ export type Holding = {
   canSell: boolean;
 };
 
+export type AvailableInvestment = {
+  id: string;
+  accountId: string;
+  exposureId: string;
+  name: string;
+  preferred: boolean;
+  canBuy: boolean;
+  canSell: boolean;
+};
+
 export type Exposure = { id: string; name: string; targetPercent: number };
 
 export type Portfolio = {
   accounts: Account[];
   holdings: Holding[];
+  availableInvestments: AvailableInvestment[];
   exposures: Exposure[];
   targetName: string;
   relativeThreshold: number;
@@ -94,6 +105,7 @@ export function createDefaultPortfolio(): Portfolio {
   return {
     accounts: [],
     holdings: [],
+    availableInvestments: [],
     exposures: DEFAULT_EXPOSURES.map(([id, name, targetPercent]) => ({ id, name, targetPercent })),
     targetName: "Global Factor Mix",
     relativeThreshold: 0.2,
@@ -115,6 +127,7 @@ export function normalizePortfolio(portfolio?: Portfolio): Portfolio {
       allowSales: account.allowSales ?? account.allowTrades ?? true,
       allowTaxableSales: isTaxableAccount(account) ? (account.allowTaxableSales ?? false) : false,
     })),
+    availableInvestments: portfolio.availableInvestments ?? [],
     exposures: hasUnusedLegacyTemplate
       ? createDefaultPortfolio().exposures
       : portfolio.exposures.length
@@ -245,9 +258,7 @@ export function recommendContribution(
 
   const trades: Trade[] = [];
   let remaining = roundDown(amount);
-  const eligible = working.holdings.filter(
-    (holding) => holding.accountId === accountId && holding.canBuy,
-  );
+  const eligible = purchaseOptions(working, accountId);
   const eligibleByExposure = new Map<string, Holding>();
   for (const holding of eligible)
     if (!eligibleByExposure.has(holding.exposureId))
@@ -343,9 +354,7 @@ export function recommendContribution(
 }
 
 function allocateCash(portfolio: Portfolio, account: Account, trades: Trade[]) {
-  const accountHoldings = portfolio.holdings.filter(
-    (holding) => holding.accountId === account.id && holding.canBuy,
-  );
+  const accountHoldings = purchaseOptions(portfolio, account.id);
   while (account.cash >= portfolio.minimumTrade) {
     const summaries = summarizePortfolio(portfolio);
     const candidate = summaries
@@ -387,12 +396,7 @@ function allocateExchanges(portfolio: Portfolio, account: Account, trades: Trade
       .filter(
         (summary) =>
           summary.status === "underweight" &&
-          portfolio.holdings.some(
-            (holding) =>
-              holding.accountId === account.id &&
-              holding.exposureId === summary.id &&
-              holding.canBuy,
-          ),
+          purchaseOptions(portfolio, account.id, summary.id).length > 0,
       )
       .sort(
         (a, b) =>
@@ -418,10 +422,7 @@ function allocateExchanges(portfolio: Portfolio, account: Account, trades: Trade
       portfolio.minimumTrade,
     );
     if (amount === 0) break;
-    const buyHolding = portfolio.holdings.find(
-      (holding) =>
-        holding.accountId === account.id && holding.exposureId === buy.id && holding.canBuy,
-    )!;
+    const buyHolding = purchaseOptions(portfolio, account.id, buy.id)[0]!;
     addTrade(trades, {
       accountId: account.id,
       action: "sell",
@@ -471,11 +472,7 @@ function explainRestrictions(portfolio: Portfolio, unresolved: ExposureSummary[]
   for (const summary of unresolved.filter((item) => item.status === "underweight")) {
     const purchasableAccounts = portfolio.accounts.filter(
       (account) =>
-        account.allowPurchases &&
-        portfolio.holdings.some(
-          (holding) =>
-            holding.accountId === account.id && holding.exposureId === summary.id && holding.canBuy,
-        ),
+        account.allowPurchases && purchaseOptions(portfolio, account.id, summary.id).length > 0,
     );
     if (purchasableAccounts.length === 0) {
       restrictions.push(`No account has a purchasable investment mapped to ${summary.name}.`);
@@ -525,12 +522,85 @@ function canFundSaleInAccount(
 }
 
 function clonePortfolio(portfolio: Portfolio): Portfolio {
-  return {
+  const cloned = {
     ...portfolio,
     accounts: portfolio.accounts.map((account) => ({ ...account })),
     holdings: portfolio.holdings.map((holding) => ({ ...holding })),
+    availableInvestments: portfolio.availableInvestments.map((investment) => ({ ...investment })),
     exposures: portfolio.exposures.map((exposure) => ({ ...exposure })),
   };
+  for (const investment of cloned.availableInvestments) {
+    if (
+      !cloned.holdings.some(
+        (holding) =>
+          holding.accountId === investment.accountId &&
+          holding.exposureId === investment.exposureId &&
+          holding.name === investment.name,
+      )
+    ) {
+      cloned.holdings.push({
+        id: investment.id,
+        accountId: investment.accountId,
+        name: investment.name,
+        value: 0,
+        exposureId: investment.exposureId,
+        canBuy: investment.canBuy,
+        canSell: investment.canSell,
+      });
+    }
+  }
+  return cloned;
+}
+
+function purchaseOptions(portfolio: Portfolio, accountId: string, exposureId?: string): Holding[] {
+  const exposureIds =
+    exposureId == null
+      ? new Set([
+          ...portfolio.holdings
+            .filter((holding) => holding.accountId === accountId)
+            .map((holding) => holding.exposureId),
+          ...portfolio.availableInvestments
+            .filter((investment) => investment.accountId === accountId)
+            .map((investment) => investment.exposureId),
+        ])
+      : new Set([exposureId]);
+  const candidates = [...exposureIds].flatMap((candidateExposureId) => {
+    const available = portfolio.availableInvestments.filter(
+      (investment) =>
+        investment.accountId === accountId &&
+        investment.exposureId === candidateExposureId &&
+        investment.canBuy,
+    );
+    if (available.length) return available;
+    return portfolio.holdings
+      .filter(
+        (holding) =>
+          holding.accountId === accountId &&
+          holding.exposureId === candidateExposureId &&
+          holding.canBuy,
+      )
+      .map((holding) => ({
+        id: holding.id,
+        accountId: holding.accountId,
+        exposureId: holding.exposureId,
+        name: holding.name,
+        preferred: false,
+        canBuy: holding.canBuy,
+        canSell: holding.canSell,
+      }));
+  });
+  return candidates
+    .sort((a, b) => Number(b.preferred) - Number(a.preferred))
+    .map(
+      (investment) =>
+        portfolio.holdings.find(
+          (holding) =>
+            holding.accountId === investment.accountId &&
+            holding.exposureId === investment.exposureId &&
+            holding.name === investment.name,
+        )!,
+    )
+    .filter((holding): holding is Holding => Boolean(holding));
 }
 
 function orderedAccounts(portfolio: Portfolio): Account[] {
@@ -672,6 +742,19 @@ export function portfolioTsv(portfolio: Portfolio): string {
       ),
     ),
     "",
+    row("Available investments"),
+    row("Fund", "Account", "Exposure", "Preferred", "Allow purchases", "Allow sales"),
+    ...portfolio.availableInvestments.map((investment) =>
+      row(
+        investment.name,
+        accountNames.get(investment.accountId) ?? "Unknown account",
+        exposureNames.get(investment.exposureId) ?? "Unmapped",
+        investment.preferred ? "Yes" : "No",
+        investment.canBuy ? "Yes" : "No",
+        investment.canSell ? "Yes" : "No",
+      ),
+    ),
+    "",
     row("Target allocation"),
     row("Exposure", "Target percentage"),
     ...portfolio.exposures.map((exposure) =>
@@ -708,13 +791,14 @@ export type PortfolioImportPreview = {
   format: "json" | "tsv";
   accounts: number;
   holdings: number;
+  availableInvestments: number;
   exposures: number;
   warnings: string[];
 };
 
 export type PortfolioImportChange = {
   kind: "added" | "removed" | "changed";
-  area: "account" | "holding" | "exposure" | "portfolio";
+  area: "account" | "holding" | "available-investment" | "exposure" | "portfolio";
   label: string;
   detail: string;
 };
@@ -744,6 +828,32 @@ export function comparePortfolios(
     incoming.accounts,
     (account) => account.name,
     accountDetails,
+  );
+  const currentAvailableAccountNames = new Map(
+    current.accounts.map((account) => [account.id, account.name]),
+  );
+  const incomingAvailableAccountNames = new Map(
+    incoming.accounts.map((account) => [account.id, account.name]),
+  );
+  const currentAvailableExposureNames = new Map(
+    current.exposures.map((exposure) => [exposure.id, exposure.name]),
+  );
+  const incomingAvailableExposureNames = new Map(
+    incoming.exposures.map((exposure) => [exposure.id, exposure.name]),
+  );
+  addRecordChanges(
+    changes,
+    "available-investment",
+    current.availableInvestments,
+    incoming.availableInvestments,
+    (investment) =>
+      `${currentAvailableAccountNames.get(investment.accountId) ?? "Unknown account"} / ${investment.name}`,
+    (investment) =>
+      `${currentAvailableExposureNames.get(investment.exposureId) ?? "Unmapped"}, preferred ${yesNo(investment.preferred)}, purchases ${yesNo(investment.canBuy)}, sales ${yesNo(investment.canSell)}`,
+    (investment) =>
+      `${incomingAvailableAccountNames.get(investment.accountId) ?? "Unknown account"} / ${investment.name}`,
+    (investment) =>
+      `${incomingAvailableExposureNames.get(investment.exposureId) ?? "Unmapped"}, preferred ${yesNo(investment.preferred)}, purchases ${yesNo(investment.canBuy)}, sales ${yesNo(investment.canSell)}`,
   );
   addRecordChanges(
     changes,
@@ -867,11 +977,20 @@ function parseTsvImport(source: string): { ok: true; preview: PortfolioImportPre
   let targetName = "Global Factor Mix";
   const accounts: Account[] = [];
   const holdings: Holding[] = [];
+  const availableInvestments: AvailableInvestment[] = [];
   const pendingHoldings: Array<{
     name: string;
     accountName: string;
     exposureName: string;
     value: number;
+    canBuy: boolean;
+    canSell: boolean;
+  }> = [];
+  const pendingAvailableInvestments: Array<{
+    name: string;
+    accountName: string;
+    exposureName: string;
+    preferred: boolean;
     canBuy: boolean;
     canSell: boolean;
   }> = [];
@@ -883,7 +1002,11 @@ function parseTsvImport(source: string): { ok: true; preview: PortfolioImportPre
     const first = row[0] ?? "";
     if (!first) continue;
     if (row.length === 1) {
-      section = ["Accounts", "Holdings", "Target allocation"].includes(first) ? first : "";
+      section = ["Accounts", "Holdings", "Available investments", "Target allocation"].includes(
+        first,
+      )
+        ? first
+        : "";
       continue;
     }
     if (first === "Target portfolio") {
@@ -918,6 +1041,15 @@ function parseTsvImport(source: string): { ok: true; preview: PortfolioImportPre
         canBuy: importBoolean(row[4], "holding purchases"),
         canSell: importBoolean(row[5], "holding sales"),
       });
+    } else if (section === "Available investments" && first !== "Fund") {
+      pendingAvailableInvestments.push({
+        name: first,
+        accountName: row[1] ?? "",
+        exposureName: row[2] ?? "",
+        preferred: importBoolean(row[3], "investment preferred"),
+        canBuy: importBoolean(row[4], "investment purchases"),
+        canSell: importBoolean(row[5], "investment sales"),
+      });
     } else if (section === "Target allocation" && first !== "Exposure") {
       const exposure = {
         id: `import-exposure-${exposures.length + 1}`,
@@ -949,10 +1081,32 @@ function parseTsvImport(source: string): { ok: true; preview: PortfolioImportPre
       canSell: pending.canSell,
     });
   }
+  for (const pending of pendingAvailableInvestments) {
+    const account = accountByName.get(pending.accountName);
+    const exposure = exposureByName.get(pending.exposureName);
+    if (!account)
+      throw new Error(
+        `Available investment references an unknown account: ${pending.accountName}.`,
+      );
+    if (!exposure)
+      throw new Error(
+        `Available investment references an unknown exposure: ${pending.exposureName}.`,
+      );
+    availableInvestments.push({
+      id: `import-available-investment-${availableInvestments.length + 1}`,
+      accountId: account.id,
+      name: pending.name,
+      exposureId: exposure.id,
+      preferred: pending.preferred,
+      canBuy: pending.canBuy,
+      canSell: pending.canSell,
+    });
+  }
   return createImportPreview(
     {
       accounts,
       holdings,
+      availableInvestments,
       exposures,
       targetName,
       relativeThreshold: 0.2,
@@ -979,6 +1133,7 @@ function createImportPreview(
       format,
       accounts: portfolio.accounts.length,
       holdings: portfolio.holdings.length,
+      availableInvestments: portfolio.availableInvestments.length,
       exposures: portfolio.exposures.length,
       warnings,
     },
@@ -991,9 +1146,12 @@ function normalizeImportedPortfolio(value: unknown): Portfolio {
   if (
     !Array.isArray(raw.accounts) ||
     !Array.isArray(raw.holdings) ||
+    !Array.isArray(raw.availableInvestments) ||
     !Array.isArray(raw.exposures)
   ) {
-    throw new Error("JSON must include accounts, holdings, and exposures arrays.");
+    throw new Error(
+      "JSON must include accounts, holdings, availableInvestments, and exposures arrays.",
+    );
   }
   if (typeof raw.targetName !== "string") throw new Error("JSON must include a targetName string.");
   const portfolio = normalizePortfolio(raw as Portfolio);
@@ -1027,6 +1185,18 @@ function normalizeImportedPortfolio(value: unknown): Portfolio {
     }
     if (!Number.isFinite(holding.value) || holding.value < 0)
       throw new Error(`Invalid value for ${holding.name}.`);
+  }
+  for (const investment of portfolio.availableInvestments) {
+    if (
+      !investment.id ||
+      !investment.name ||
+      !accountIds.has(investment.accountId) ||
+      !exposureIds.has(investment.exposureId)
+    ) {
+      throw new Error(
+        `Available investment ${investment.name || "(unnamed)"} references an unknown account or exposure.`,
+      );
+    }
   }
   return portfolio;
 }

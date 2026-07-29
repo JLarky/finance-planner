@@ -53,6 +53,7 @@ void test("portfolio exports as tab-separated sections", () => {
   assert.match(exported, /Portfolio summary\nMetric\tValue/);
   assert.match(exported, /Accounts\nAccount\tType\tCash/);
   assert.match(exported, /Holdings\nFund\tAccount\tExposure/);
+  assert.match(exported, /Available investments\nFund\tAccount\tExposure\tPreferred/);
   assert.match(exported, /Portfolio comparison\nExposure\tCurrent percentage/);
   assert.ok(exported.split("\n").some((line) => line.includes("\t")));
   assert.equal(exported.includes(","), false);
@@ -94,6 +95,7 @@ void test("portfolio imports its TSV and JSON exports", () => {
     assert.equal(imported.preview.portfolio.holdings[0]?.name, "Investment A");
     assert.equal(imported.preview.accounts, 1);
     assert.equal(imported.preview.holdings, 1);
+    assert.deepEqual(imported.preview.portfolio.availableInvestments, []);
   }
 });
 
@@ -193,4 +195,45 @@ void test("contribution planning does not sell and allocates eligible money", ()
   assert.equal(plan.trades[0]?.action, "buy");
   assert.equal(plan.trades[0]?.amount, 100);
   assert.equal(plan.remainingCash, 0);
+});
+
+void test("available investments can recommend a fund that is not currently held", () => {
+  const value = createDefaultPortfolio();
+  value.exposures = [
+    { id: "broad-us", name: "Broad US market", targetPercent: 50 },
+    { id: "us-small-value", name: "US small-cap value", targetPercent: 50 },
+  ];
+  value.accounts.push({
+    id: "ira",
+    name: "IRA",
+    type: "traditional-ira",
+    cash: 100,
+    allowPurchases: true,
+    allowSales: true,
+    allowTaxableSales: false,
+    expectContributions: true,
+  });
+  value.holdings.push({
+    id: "broad",
+    accountId: "ira",
+    name: "Broad fund",
+    value: 100,
+    exposureId: "broad-us",
+    canBuy: true,
+    canSell: true,
+  });
+  value.availableInvestments.push({
+    id: "small-option",
+    accountId: "ira",
+    name: "Small value fund",
+    exposureId: "us-small-value",
+    preferred: true,
+    canBuy: true,
+    canSell: true,
+  });
+  const plan = recommendRebalance(value);
+  assert.equal(
+    plan.trades.some((trade) => trade.holdingName === "Small value fund"),
+    true,
+  );
 });
