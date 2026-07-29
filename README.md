@@ -30,7 +30,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-Open the URL printed by `boo peek finance-planner-dev` (currently [http://localhost:5471](http://localhost:5471)). `/` is public, `/login` creates or authenticates a passkey, and `/app` is the first authenticated workspace.
+Open the URL printed by `boo peek finance-planner-dev` (currently [http://localhost:5471](http://localhost:5471)). `/` is public, `/health` checks storage connectivity, `/login` creates or authenticates a passkey, and `/app` is the first authenticated workspace.
 
 See [`local-dev.md`](./local-dev.md) for the isolated `boo` workflow, local auth shortcut, agent-browser testing, and per-server data setup.
 
