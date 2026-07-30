@@ -3,6 +3,10 @@ import test from "node:test";
 import {
   createDefaultPortfolio,
   comparePortfolios,
+  DEFAULT_DISTRIBUTION,
+  distributionExposures,
+  distributionQuery,
+  parseDistributionQuery,
   portfolioTotal,
   portfolioTsv,
   parsePortfolioImport,
@@ -38,6 +42,33 @@ function portfolio() {
 
 void test("default target exposures total 100 percent", () => {
   assert.equal(targetTotal(createDefaultPortfolio()), 100);
+});
+
+void test("homepage distribution defaults reproduce the default targets", () => {
+  const exposures = distributionExposures(DEFAULT_DISTRIBUTION);
+  assert.equal(targetTotal({ ...createDefaultPortfolio(), exposures }), 100);
+  assert.deepEqual(
+    exposures.map(({ id, targetPercent }) => ({ id, targetPercent })),
+    [
+      { id: "broad-us", targetPercent: 50 },
+      { id: "us-small-value", targetPercent: 10 },
+      { id: "developed-international", targetPercent: 24 },
+      { id: "developed-international-small-value", targetPercent: 6 },
+      { id: "emerging-markets", targetPercent: 10 },
+      { id: "bonds", targetPercent: 0 },
+      { id: "real-estate", targetPercent: 0 },
+    ],
+  );
+});
+
+void test("homepage distribution selections round-trip through query parameters", () => {
+  const selection = { us: 75, tilt: 20, stocks: 65, realEstate: 10 };
+  assert.deepEqual(parseDistributionQuery(distributionQuery(selection)), selection);
+  assert.equal(parseDistributionQuery("us=101&tilt=20&stocks=65&realEstate=10"), null);
+  assert.equal(
+    targetTotal({ ...createDefaultPortfolio(), exposures: distributionExposures(selection) }),
+    100,
+  );
 });
 
 void test("summaries include cash in the portfolio denominator", () => {

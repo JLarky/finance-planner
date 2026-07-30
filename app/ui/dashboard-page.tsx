@@ -842,7 +842,7 @@ function TargetSection(
                     min="0"
                     max="100"
                     step="0.1"
-                    defaultValue={exposure.targetPercent}
+                    defaultValue={exposure.targetPercent.toFixed(2)}
                   />
                 </label>
                 <div mix={smallButtonRow}>

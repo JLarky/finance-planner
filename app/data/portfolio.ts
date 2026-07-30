@@ -101,6 +101,86 @@ const DEFAULT_EXPOSURES = [
 
 const LEGACY_EXPOSURE_IDS = ["us-market", "international-market", "small-value", "bonds"];
 
+export type DistributionSelection = {
+  us: number;
+  tilt: number;
+  stocks: number;
+  realEstate: number;
+};
+
+export const DEFAULT_DISTRIBUTION: DistributionSelection = {
+  us: 60,
+  tilt: 50,
+  stocks: 100,
+  realEstate: 0,
+};
+
+function boundedPercent(value: number): number {
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+export function distributionQuery(selection: DistributionSelection): string {
+  return new URLSearchParams({
+    us: String(boundedPercent(selection.us)),
+    tilt: String(boundedPercent(selection.tilt)),
+    stocks: String(boundedPercent(selection.stocks)),
+    realEstate: String(boundedPercent(selection.realEstate)),
+  }).toString();
+}
+
+export function parseDistributionQuery(value: string | null): DistributionSelection | null {
+  if (!value) return null;
+  const params = new URLSearchParams(value);
+  const values = ["us", "tilt", "stocks", "realEstate"].map((key) => Number(params.get(key)));
+  if (values.some((item) => !Number.isFinite(item) || item < 0 || item > 100)) return null;
+  return { us: values[0]!, tilt: values[1]!, stocks: values[2]!, realEstate: values[3]! };
+}
+
+export function distributionExposures(selection: DistributionSelection): Exposure[] {
+  const us = boundedPercent(selection.us);
+  const tilt = boundedPercent(selection.tilt) / 100;
+  const realEstate = boundedPercent(selection.realEstate);
+  const investable = 100 - realEstate;
+  const stocks = investable * (boundedPercent(selection.stocks) / 100);
+  const bonds = investable - stocks;
+  const usShare = 0.2 + (us / 100) * (2 / 3);
+  const internationalShare = 1 - usShare;
+  const emergingMarkets = stocks * internationalShare * 0.25;
+  const developedInternational = stocks * internationalShare - emergingMarkets;
+  const usSmallValue = stocks * usShare * tilt * (1 / 3);
+  const developedInternationalSmallValue = developedInternational * tilt * 0.4;
+  const exposure = (id: string, name: string, targetPercent: number): Exposure => ({
+    id,
+    name,
+    targetPercent: Math.round(targetPercent * 100) / 100,
+  });
+  const exposures = [
+    exposure("broad-us", "Broad US market", stocks * usShare - usSmallValue),
+    exposure("us-small-value", "US small-cap value", usSmallValue),
+    exposure(
+      "developed-international",
+      "Developed international broad",
+      developedInternational - developedInternationalSmallValue,
+    ),
+    exposure(
+      "developed-international-small-value",
+      "Developed international small-cap value",
+      developedInternationalSmallValue,
+    ),
+    exposure("emerging-markets", "Emerging markets", emergingMarkets),
+    exposure("bonds", "Bonds", bonds),
+    exposure("real-estate", "Real estate", realEstate),
+  ];
+  const rounded = exposures.map((item) => ({
+    ...item,
+    targetPercent: Math.round(item.targetPercent * 100) / 100,
+  }));
+  const total = rounded.slice(0, -1).reduce((sum, item) => sum + item.targetPercent, 0);
+  const last = rounded.at(-1);
+  if (last) last.targetPercent = Math.round((100 - total) * 100) / 100;
+  return rounded;
+}
+
 export function createDefaultPortfolio(): Portfolio {
   return {
     accounts: [],

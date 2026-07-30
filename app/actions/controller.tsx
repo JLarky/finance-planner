@@ -13,6 +13,9 @@ import {
 import {
   isTaxableAccount,
   comparePortfolios,
+  createDefaultPortfolio,
+  distributionExposures,
+  parseDistributionQuery,
   parsePortfolioImport,
   recommendContribution,
   recommendRebalance,
@@ -74,6 +77,13 @@ export default createController(routes, {
       const user = await ensureDevUser();
       c.session.regenerateId();
       bindUserSession(c.session, c.request, user.id);
+      const form = await c.request.formData();
+      const destination = returnTo(text(form, "returnTo"), "/app");
+      const requestedDistribution = distributionFromUrl(destination);
+      if (requestedDistribution && canStartWithDistribution(user)) {
+        user.portfolio.exposures = distributionExposures(requestedDistribution);
+        await saveUser(user);
+      }
       return c.render(<DashboardPage user={user} tab="accounts" />);
     },
     async account(c) {
@@ -201,6 +211,11 @@ export default createController(routes, {
             staleSession
           />,
         );
+      const requestedDistribution = distributionFromUrl(c.request.url);
+      if (requestedDistribution && canStartWithDistribution(user)) {
+        user.portfolio.exposures = distributionExposures(requestedDistribution);
+        await saveUser(user);
+      }
       if (c.request.method === "POST") {
         const form = await c.request.formData();
         const intent = text(form, "intent");
@@ -474,4 +489,39 @@ function accountType(value: string): AccountType {
     "other-taxable",
   ];
   return values.includes(value as AccountType) ? (value as AccountType) : "taxable";
+}
+
+function distributionFromUrl(value: string): ReturnType<typeof parseDistributionQuery> {
+  try {
+    return parseDistributionQuery(
+      new URL(value, "http://localhost").searchParams.get("distribution"),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function canStartWithDistribution(user: {
+  portfolio: {
+    accounts: unknown[];
+    holdings: unknown[];
+    availableInvestments: unknown[];
+    exposures: Array<{ id: string; name: string; targetPercent: number }>;
+  };
+}) {
+  const defaults = createDefaultPortfolio().exposures;
+  return (
+    user.portfolio.accounts.length === 0 &&
+    user.portfolio.holdings.length === 0 &&
+    user.portfolio.availableInvestments.length === 0 &&
+    user.portfolio.exposures.length === defaults.length &&
+    user.portfolio.exposures.every((exposure, index) => {
+      const expected = defaults[index];
+      return (
+        expected?.id === exposure.id &&
+        expected.name === exposure.name &&
+        expected.targetPercent === exposure.targetPercent
+      );
+    })
+  );
 }

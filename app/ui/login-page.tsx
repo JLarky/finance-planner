@@ -102,6 +102,7 @@ export function LoginPage(
               <PasskeyButtons mode="login" returnTo={h.props.returnTo} error={h.props.error} />
               {h.props.devAuthEnabled ? (
                 <form method="POST" action="/dev-login">
+                  <input type="hidden" name="returnTo" value={h.props.returnTo} />
                   <button
                     type="submit"
                     mix={css({
