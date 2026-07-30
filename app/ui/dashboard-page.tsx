@@ -915,6 +915,13 @@ function ComparisonSection(
     canPlan: boolean;
   }>,
 ) {
+  const availableInvestmentsByExposure = new Map<string, string[]>();
+  for (const investment of h.props.portfolio.availableInvestments) {
+    const investments = availableInvestmentsByExposure.get(investment.exposureId) ?? [];
+    investments.push(investment.name);
+    availableInvestmentsByExposure.set(investment.exposureId, investments);
+  }
+
   return () => (
     <section mix={panel}>
       <div mix={sectionHeader}>
@@ -962,7 +969,14 @@ function ComparisonSection(
             <tbody>
               {h.props.summaries.map((summary) => (
                 <tr key={summary.id}>
-                  <td>{summary.name}</td>
+                  <td>
+                    {summary.name}
+                    {availableInvestmentsByExposure.get(summary.id)?.length ? (
+                      <small mix={availableInvestmentDetail}>
+                        {availableInvestmentsByExposure.get(summary.id)?.join(", ")}
+                      </small>
+                    ) : null}
+                  </td>
                   <td>{summary.currentPercent.toFixed(1)}%</td>
                   <td>{summary.targetPercent.toFixed(1)}%</td>
                   <td>{money(summary.currentValue)}</td>
@@ -1465,6 +1479,12 @@ const statusDetail = css({
   color: "#a5b9ad",
   marginTop: "3px",
   maxWidth: "170px",
+});
+const availableInvestmentDetail = css({
+  display: "block",
+  color: "#a5b9ad",
+  fontSize: "13px",
+  marginTop: "4px",
 });
 const priorityNote = css({
   color: "#c9d9ce",
