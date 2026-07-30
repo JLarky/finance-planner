@@ -6,22 +6,20 @@ export const TsvExport = clientEntry(
   function TsvExport(h: Handle<{ content: string; jsonContent: string }>) {
     let status = "";
 
-    async function copy() {
+    async function copy(content: string, successMessage: string) {
       try {
-        await navigator.clipboard.writeText(h.props.content);
-        status = "Copied — paste it into Google Docs or Sheets.";
+        await navigator.clipboard.writeText(content);
+        status = successMessage;
       } catch {
         const textarea = document.createElement("textarea");
-        textarea.value = h.props.content;
+        textarea.value = content;
         textarea.style.position = "fixed";
         textarea.style.opacity = "0";
         document.body.append(textarea);
         textarea.select();
         const copied = document.execCommand("copy");
         textarea.remove();
-        status = copied
-          ? "Copied — paste it into Google Docs or Sheets."
-          : "Copy failed. Select the text below.";
+        status = copied ? successMessage : "Copy failed. Select the text below.";
       }
       void h.update();
     }
@@ -59,8 +57,28 @@ export const TsvExport = clientEntry(
           plain-text file for Excel.
         </p>
         <div mix={css({ display: "flex", flexWrap: "wrap", gap: "10px" })}>
-          <button type="button" mix={[button({}), on("click", () => void copy())]} data-copy-export>
+          <button
+            type="button"
+            mix={[
+              button({}),
+              on(
+                "click",
+                () => void copy(h.props.content, "Copied — paste it into Google Docs or Sheets."),
+              ),
+            ]}
+            data-copy-export
+          >
             Copy tab-separated text
+          </button>
+          <button
+            type="button"
+            mix={[
+              button({ secondary: true }),
+              on("click", () => void copy(h.props.jsonContent, "Copied JSON backup.")),
+            ]}
+            data-copy-json
+          >
+            Copy JSON
           </button>
           <button
             type="button"
