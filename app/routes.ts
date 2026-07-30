@@ -4,7 +4,7 @@ export const routes = route({
   home: "/",
   health: "/health",
   login: "/login",
-  app: "/app",
+  app: "/app(/:tab)",
   account: "/account",
   invite: "/invite/:inviteId",
   logout: post("logout"),
