@@ -122,13 +122,33 @@ function DistributionExplorer(
             right="Factor tilt"
             value={h.props.initialSelection.tilt}
           />
+          <p
+            mix={css({
+              color: "#b8e986",
+              fontWeight: 700,
+              letterSpacing: ".12em",
+              textTransform: "uppercase",
+              fontSize: "12px",
+              margin: "4px 0 0",
+            })}
+          >
+            Asset mix
+          </p>
           <DistributionSlider
-            name="assets"
-            label="Bonds, stocks, and real estate"
-            left="Bonds"
-            right="Real estate"
-            value={h.props.initialSelection.assets}
-            middle="Stocks"
+            name="stocks"
+            label="Stocks versus bonds"
+            left="More bonds"
+            right="More stocks"
+            value={h.props.initialSelection.stocks}
+          />
+          <DistributionSlider
+            name="realEstate"
+            label="Real-estate share"
+            left="No real estate"
+            right="More real estate"
+            value={h.props.initialSelection.realEstate}
+            max={30}
+            suffix="% of portfolio"
           />
         </div>
       </div>
@@ -173,6 +193,8 @@ function DistributionSlider(
     left: string;
     right: string;
     middle?: string;
+    max?: number;
+    suffix?: string;
     value: number;
   }>,
 ) {
@@ -180,13 +202,16 @@ function DistributionSlider(
     <label mix={css({ display: "grid", gap: "8px", color: "#d4e1d8", fontSize: "14px" })}>
       <span mix={css({ display: "flex", justifyContent: "space-between", gap: "12px" })}>
         <strong>{h.props.label}</strong>
-        <output data-distribution-output={h.props.name}>{h.props.value}%</output>
+        <output data-distribution-output={h.props.name}>
+          {h.props.value}
+          {h.props.suffix ? ` ${h.props.suffix}` : "%"}
+        </output>
       </span>
       <input
         data-distribution-input={h.props.name}
         type="range"
         min="0"
-        max="100"
+        max={h.props.max ?? 100}
         step="1"
         value={h.props.value}
         aria-label={h.props.label}

@@ -62,9 +62,9 @@ void test("homepage distribution defaults reproduce the default targets", () => 
 });
 
 void test("homepage distribution selections round-trip through query parameters", () => {
-  const selection = { us: 75, tilt: 20, assets: 35 };
+  const selection = { us: 75, tilt: 20, stocks: 65, realEstate: 10 };
   assert.deepEqual(parseDistributionQuery(distributionQuery(selection)), selection);
-  assert.equal(parseDistributionQuery("us=101&tilt=20&assets=35"), null);
+  assert.equal(parseDistributionQuery("us=101&tilt=20&stocks=65&realEstate=10"), null);
   assert.equal(
     targetTotal({ ...createDefaultPortfolio(), exposures: distributionExposures(selection) }),
     100,

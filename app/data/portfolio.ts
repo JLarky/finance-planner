@@ -104,10 +104,16 @@ const LEGACY_EXPOSURE_IDS = ["us-market", "international-market", "small-value",
 export type DistributionSelection = {
   us: number;
   tilt: number;
-  assets: number;
+  stocks: number;
+  realEstate: number;
 };
 
-export const DEFAULT_DISTRIBUTION: DistributionSelection = { us: 60, tilt: 50, assets: 50 };
+export const DEFAULT_DISTRIBUTION: DistributionSelection = {
+  us: 60,
+  tilt: 50,
+  stocks: 100,
+  realEstate: 0,
+};
 
 function boundedPercent(value: number): number {
   return Math.min(100, Math.max(0, Math.round(value)));
@@ -117,25 +123,26 @@ export function distributionQuery(selection: DistributionSelection): string {
   return new URLSearchParams({
     us: String(boundedPercent(selection.us)),
     tilt: String(boundedPercent(selection.tilt)),
-    assets: String(boundedPercent(selection.assets)),
+    stocks: String(boundedPercent(selection.stocks)),
+    realEstate: String(boundedPercent(selection.realEstate)),
   }).toString();
 }
 
 export function parseDistributionQuery(value: string | null): DistributionSelection | null {
   if (!value) return null;
   const params = new URLSearchParams(value);
-  const values = ["us", "tilt", "assets"].map((key) => Number(params.get(key)));
+  const values = ["us", "tilt", "stocks", "realEstate"].map((key) => Number(params.get(key)));
   if (values.some((item) => !Number.isFinite(item) || item < 0 || item > 100)) return null;
-  return { us: values[0]!, tilt: values[1]!, assets: values[2]! };
+  return { us: values[0]!, tilt: values[1]!, stocks: values[2]!, realEstate: values[3]! };
 }
 
 export function distributionExposures(selection: DistributionSelection): Exposure[] {
   const us = boundedPercent(selection.us);
   const tilt = boundedPercent(selection.tilt) / 100;
-  const assets = boundedPercent(selection.assets);
-  const bonds = assets <= 50 ? 100 - assets * 2 : 0;
-  const stocks = assets <= 50 ? assets * 2 : 200 - assets * 2;
-  const realEstate = assets > 50 ? (assets - 50) * 2 : 0;
+  const realEstate = boundedPercent(selection.realEstate);
+  const investable = 100 - realEstate;
+  const stocks = investable * (boundedPercent(selection.stocks) / 100);
+  const bonds = investable - stocks;
   const usShare = 0.2 + (us / 100) * (2 / 3);
   const internationalShare = 1 - usShare;
   const emergingMarkets = stocks * internationalShare * 0.25;

@@ -58,13 +58,15 @@ function syncDistributionExplorers() {
       const selection = {
         us: Number(input("us")?.value ?? 60),
         tilt: Number(input("tilt")?.value ?? 50),
-        assets: Number(input("assets")?.value ?? 50),
+        stocks: Number(input("stocks")?.value ?? 100),
+        realEstate: Number(input("realEstate")?.value ?? 0),
       };
-      for (const name of ["us", "tilt", "assets"] as const) {
+      for (const name of ["us", "tilt", "stocks", "realEstate"] as const) {
         const value = selection[name];
         const node = output(name);
-        if (node) node.value = `${value}%`;
-        if (node) node.textContent = `${value}%`;
+        const display = name === "realEstate" ? `${value}% of portfolio` : `${value}%`;
+        if (node) node.value = display;
+        if (node) node.textContent = display;
       }
       const exposures = distributionExposures(selection);
       for (const exposure of exposures) {
