@@ -974,6 +974,7 @@ function parseTsvImport(source: string): { ok: true; preview: PortfolioImportPre
     .split("\n")
     .map((line) => line.split("\t").map((cell) => cell.trim()));
   let section = "";
+  let hasAccountsSection = false;
   let targetName = "Global Factor Mix";
   const accounts: Account[] = [];
   const holdings: Holding[] = [];
@@ -1007,6 +1008,7 @@ function parseTsvImport(source: string): { ok: true; preview: PortfolioImportPre
       )
         ? first
         : "";
+      if (first === "Accounts") hasAccountsSection = true;
       continue;
     }
     if (first === "Target portfolio") {
@@ -1062,7 +1064,7 @@ function parseTsvImport(source: string): { ok: true; preview: PortfolioImportPre
       exposures.push(exposure);
     }
   }
-  if (!accounts.length) throw new Error("The TSV does not contain an Accounts section with data.");
+  if (!hasAccountsSection) throw new Error("The TSV does not contain an Accounts section.");
   if (!exposures.length)
     throw new Error("The TSV does not contain a Target allocation section with data.");
   for (const pending of pendingHoldings) {
