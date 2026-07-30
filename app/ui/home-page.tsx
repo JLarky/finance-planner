@@ -62,7 +62,8 @@ export function HomePage(h: Handle<{ signedIn: boolean }>) {
         />
         <footer mix={css(muted)}>
           Private by default. Your portfolio data will live in your account. This explorer is
-          educational, not personalized financial advice.
+          educational, not personalized financial advice. Finance Planner is independent and is not
+          endorsed by or affiliated with Ben Felix, PWL Capital, or Rational Reminder.
         </footer>
       </main>
     </Document>
