@@ -99,6 +99,22 @@ void test("portfolio imports its TSV and JSON exports", () => {
   }
 });
 
+void test("empty portfolios round-trip through TSV", () => {
+  const value = createDefaultPortfolio();
+  const imported = parsePortfolioImport(portfolioTsv(value));
+  if (!imported.ok) throw new Error(imported.error);
+  assert.equal(imported.preview.accounts, 0);
+  assert.equal(imported.preview.holdings, 0);
+  assert.equal(imported.preview.availableInvestments, 0);
+  assert.deepEqual(
+    imported.preview.portfolio.exposures.map(({ name, targetPercent }) => ({
+      name,
+      targetPercent,
+    })),
+    value.exposures.map(({ name, targetPercent }) => ({ name, targetPercent })),
+  );
+});
+
 void test("portfolio import preview compares semantic changes without using ids", () => {
   const value = portfolio();
   const imported = parsePortfolioImport(portfolioTsv(value));
