@@ -20,7 +20,7 @@ import {
 } from "../data/portfolio.ts";
 import { HomePage } from "../ui/home-page.tsx";
 import { LoginPage } from "../ui/login-page.tsx";
-import { DashboardPage } from "../ui/dashboard-page.tsx";
+import { DashboardPage, type PlannerTab } from "../ui/dashboard-page.tsx";
 import { AccountPage } from "../ui/account-page.tsx";
 import { InvitePage } from "../ui/invite-page.tsx";
 import { AccessPage } from "../ui/access-page.tsx";
@@ -28,6 +28,12 @@ import { KV_NAMESPACE, kvKey, openKv, readLocal } from "../data/kv.ts";
 
 function returnTo(value: string | null, fallback: string): string {
   return value?.startsWith("/") && !value.startsWith("//") ? value : fallback;
+}
+
+function plannerTab(value: string | undefined): PlannerTab {
+  return ["accounts", "holdings", "available", "target", "compare", "plan"].includes(value ?? "")
+    ? (value as PlannerTab)
+    : "accounts";
 }
 export default createController(routes, {
   actions: {
@@ -68,7 +74,7 @@ export default createController(routes, {
       const user = await ensureDevUser();
       c.session.regenerateId();
       bindUserSession(c.session, c.request, user.id);
-      return c.render(<DashboardPage user={user} />);
+      return c.render(<DashboardPage user={user} tab="accounts" />);
     },
     async account(c) {
       const id = userId(c.session, c.request);
@@ -175,11 +181,12 @@ export default createController(routes, {
       return c.render(<InvitePage inviteId={inviteId} error={null} />);
     },
     async app(c) {
+      const tab = plannerTab(c.params.tab);
       const id = userId(c.session, c.request);
       if (!id)
         return c.render(
           <AccessPage
-            destination={routes.app.href()}
+            destination="/app"
             title="Sign in to open your planner"
             detail="Your portfolio workspace is private. Choose sign in to continue without leaving this page unexpectedly."
           />,
@@ -188,7 +195,7 @@ export default createController(routes, {
       if (!user)
         return c.render(
           <AccessPage
-            destination={routes.app.href()}
+            destination="/app"
             title="Your session needs attention"
             detail="This session no longer matches a saved account. Sign out this session, then sign in again."
             staleSession
@@ -202,13 +209,18 @@ export default createController(routes, {
           const parsed = parsePortfolioImport(source);
           if (!parsed.ok) {
             return c.render(
-              <DashboardPage user={user} importResult={{ error: parsed.error, source }} />,
+              <DashboardPage
+                user={user}
+                tab={tab}
+                importResult={{ error: parsed.error, source }}
+              />,
             );
           }
           if (intent === "preview-import") {
             return c.render(
               <DashboardPage
                 user={user}
+                tab={tab}
                 importResult={{
                   preview: parsed.preview,
                   source,
@@ -222,6 +234,7 @@ export default createController(routes, {
           return c.render(
             <DashboardPage
               user={user}
+              tab={tab}
               importResult={{
                 notice: `Imported ${parsed.preview.accounts} accounts, ${parsed.preview.holdings} holdings, ${parsed.preview.availableInvestments} available investments, and ${parsed.preview.exposures} exposures.`,
               }}
@@ -379,12 +392,15 @@ export default createController(routes, {
             );
           }
         } else if (intent === "rebalance") {
-          return c.render(<DashboardPage user={user} plan={recommendRebalance(portfolio)} />);
+          return c.render(
+            <DashboardPage user={user} tab="plan" plan={recommendRebalance(portfolio)} />,
+          );
         } else if (intent === "contribution") {
           const frequency = text(form, "frequency") === "recurring" ? "recurring" : "one-time";
           return c.render(
             <DashboardPage
               user={user}
+              tab="plan"
               plan={recommendContribution(
                 portfolio,
                 number(form, "amount"),
@@ -396,7 +412,7 @@ export default createController(routes, {
         }
         await saveUser(user);
       }
-      return c.render(<DashboardPage user={user} />);
+      return c.render(<DashboardPage user={user} tab={tab} />);
     },
     async logout(c) {
       c.session.unset("userId");

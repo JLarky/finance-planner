@@ -23,6 +23,15 @@ import { button, muted, shell } from "./styles.ts";
 import { TsvExport } from "./tsv-export.tsx";
 
 type Portfolio = User["portfolio"];
+export type PlannerTab = "accounts" | "holdings" | "available" | "target" | "compare" | "plan";
+const plannerTabs: Array<{ id: PlannerTab; label: string }> = [
+  { id: "accounts", label: "Accounts" },
+  { id: "holdings", label: "Holdings" },
+  { id: "available", label: "Available" },
+  { id: "target", label: "Target" },
+  { id: "compare", label: "Compare" },
+  { id: "plan", label: "Plan" },
+];
 export type ImportResult = {
   error?: string;
   notice?: string;
@@ -32,7 +41,7 @@ export type ImportResult = {
 };
 
 export function DashboardPage(
-  h: Handle<{ user: User; plan?: RebalancePlan; importResult?: ImportResult }>,
+  h: Handle<{ user: User; tab: PlannerTab; plan?: RebalancePlan; importResult?: ImportResult }>,
 ) {
   const portfolio = h.props.user.portfolio;
   const summaries = summarizePortfolio(portfolio);
@@ -44,6 +53,7 @@ export function DashboardPage(
   const canPlan =
     validTargets && hasAccounts && (hasHoldings || portfolio.availableInvestments.length > 0);
   const accountName = new Map(portfolio.accounts.map((account) => [account.id, account.name]));
+  const tab = h.props.tab;
   return () => (
     <Document title="Your plan · Finance Planner">
       <main mix={shell}>
@@ -71,18 +81,7 @@ export function DashboardPage(
             account where the money lives.
           </p>
 
-          <div mix={progressGrid}>
-            <ProgressStep number="1" label="Accounts" complete={hasAccounts} />
-            <ProgressStep number="2" label="Holdings" complete={hasHoldings} />
-            <ProgressStep
-              number="3"
-              label="Available"
-              complete={portfolio.availableInvestments.length > 0}
-            />
-            <ProgressStep number="4" label="Target" complete={validTargets} />
-            <ProgressStep number="5" label="Compare" complete={total > 0 && validTargets} />
-            <ProgressStep number="6" label="Plan" complete={Boolean(h.props.plan)} />
-          </div>
+          <PlannerTabs activeTab={tab} />
 
           <div mix={metricGrid}>
             <Metric label="Total portfolio" value={money(total)} />
@@ -96,42 +95,51 @@ export function DashboardPage(
             />
           </div>
 
-          <AccountsSection accounts={portfolio.accounts} holdings={portfolio.holdings} />
-          <HoldingsSection
-            accounts={portfolio.accounts}
-            holdings={portfolio.holdings}
-            exposures={portfolio.exposures}
-          />
-          <AvailableInvestmentsSection
-            accounts={portfolio.accounts}
-            availableInvestments={portfolio.availableInvestments}
-            exposures={portfolio.exposures}
-          />
-          <TargetSection
-            exposures={portfolio.exposures}
-            holdings={portfolio.holdings}
-            availableInvestments={portfolio.availableInvestments}
-            total={targetTotal(portfolio)}
-            targetName={portfolio.targetName}
-          />
-          <ComparisonSection
-            portfolio={portfolio}
-            total={total}
-            summaries={summaries}
-            validTargets={validTargets}
-            canPlan={canPlan}
-          />
-          <TsvExport
-            content={portfolioTsv(portfolio)}
-            jsonContent={JSON.stringify(portfolio, null, 2)}
-          />
-          <ImportSection result={h.props.importResult} />
-          {h.props.plan?.kind === "rebalance" ? (
-            <PlanResult plan={h.props.plan} accountName={accountName} />
+          {tab === "accounts" ? (
+            <AccountsSection accounts={portfolio.accounts} holdings={portfolio.holdings} />
           ) : null}
-          <ContributionSection accounts={portfolio.accounts} canPlan={canPlan} total={total} />
-          {h.props.plan?.kind === "contribution" ? (
-            <PlanResult plan={h.props.plan} accountName={accountName} />
+          {tab === "holdings" ? (
+            <HoldingsSection
+              accounts={portfolio.accounts}
+              holdings={portfolio.holdings}
+              exposures={portfolio.exposures}
+            />
+          ) : null}
+          {tab === "available" ? (
+            <AvailableInvestmentsSection
+              accounts={portfolio.accounts}
+              availableInvestments={portfolio.availableInvestments}
+              exposures={portfolio.exposures}
+            />
+          ) : null}
+          {tab === "target" ? (
+            <TargetSection
+              exposures={portfolio.exposures}
+              holdings={portfolio.holdings}
+              availableInvestments={portfolio.availableInvestments}
+              total={targetTotal(portfolio)}
+              targetName={portfolio.targetName}
+            />
+          ) : null}
+          {tab === "compare" ? (
+            <ComparisonSection
+              portfolio={portfolio}
+              total={total}
+              summaries={summaries}
+              validTargets={validTargets}
+              canPlan={canPlan}
+            />
+          ) : null}
+          {tab === "plan" ? (
+            <>
+              <ContributionSection accounts={portfolio.accounts} canPlan={canPlan} total={total} />
+              {h.props.plan ? <PlanResult plan={h.props.plan} accountName={accountName} /> : null}
+              <TsvExport
+                content={portfolioTsv(portfolio)}
+                jsonContent={JSON.stringify(portfolio, null, 2)}
+              />
+              <ImportSection result={h.props.importResult} />
+            </>
           ) : null}
         </section>
       </main>
@@ -190,7 +198,7 @@ function ImportSection(h: Handle<{ result?: ImportResult }>) {
           ) : (
             <p mix={css(muted)}>No changes detected.</p>
           )}
-          <form method="POST" action="/app">
+          <form method="POST">
             <input type="hidden" name="intent" value="confirm-import" />
             <textarea name="importData" hidden defaultValue={result.source} />
             <button type="submit" mix={button({})}>
@@ -199,7 +207,7 @@ function ImportSection(h: Handle<{ result?: ImportResult }>) {
           </form>
         </div>
       ) : null}
-      <form method="POST" action="/app" mix={form}>
+      <form method="POST" mix={form}>
         <input type="hidden" name="intent" value="preview-import" />
         <label>
           JSON or tab-separated data
@@ -241,12 +249,20 @@ function Metric(h: Handle<{ label: string; value: string; tone?: "normal" | "war
   );
 }
 
-function ProgressStep(h: Handle<{ number: string; label: string; complete: boolean }>) {
+function PlannerTabs(h: Handle<{ activeTab: PlannerTab }>) {
   return () => (
-    <div mix={[progressStep, css({ opacity: h.props.complete ? 1 : 0.65 })]}>
-      <span mix={progressNumber}>{h.props.complete ? "✓" : h.props.number}</span>
-      <span>{h.props.label}</span>
-    </div>
+    <nav aria-label="Planner steps" mix={tabNav}>
+      {plannerTabs.map((tab) => (
+        <a
+          key={tab.id}
+          href={`/app/${tab.id}`}
+          aria-current={h.props.activeTab === tab.id ? "page" : undefined}
+          mix={h.props.activeTab === tab.id ? [tabLink, activeTabLink] : tabLink}
+        >
+          {tab.label}
+        </a>
+      ))}
+    </nav>
   );
 }
 
@@ -311,7 +327,7 @@ function AccountEditor(h: Handle<{ account: Account; holdingCount: number; inves
         </span>
         <span mix={summaryValue}>{money(h.props.invested + account.cash)}</span>
       </summary>
-      <form method="POST" action="/app" mix={form} data-account-form>
+      <form method="POST" mix={form} data-account-form>
         <input type="hidden" name="accountId" value={account.id} />
         <div mix={formGrid}>
           <label>
@@ -368,7 +384,7 @@ function AddAccountForm() {
   return () => (
     <div mix={innerCard}>
       <h3 mix={subheading}>Add account</h3>
-      <form method="POST" action="/app" mix={form} data-account-form>
+      <form method="POST" mix={form} data-account-form>
         <input type="hidden" name="intent" value="add-account" />
         <label>
           Account name
@@ -478,7 +494,7 @@ function HoldingEditor(
         </span>
         <span mix={summaryValue}>{money(holding.value)}</span>
       </summary>
-      <form method="POST" action="/app" mix={form}>
+      <form method="POST" mix={form}>
         <input type="hidden" name="holdingId" value={holding.id} />
         <HoldingFields
           holding={holding}
@@ -502,7 +518,7 @@ function AddHoldingForm(h: Handle<{ accounts: Account[]; exposures: Exposure[] }
   return () => (
     <div mix={innerCard}>
       <h3 mix={subheading}>Add holding</h3>
-      <form method="POST" action="/app" mix={form}>
+      <form method="POST" mix={form}>
         <input type="hidden" name="intent" value="add-holding" />
         <HoldingFields accounts={h.props.accounts} exposures={h.props.exposures} />
         <button mix={button({})}>Add holding</button>
@@ -636,7 +652,7 @@ function AvailableInvestmentEditor(
           </small>
         </span>
       </summary>
-      <form method="POST" action="/app" mix={form}>
+      <form method="POST" mix={form}>
         <input type="hidden" name="availableInvestmentId" value={investment.id} />
         <AvailableInvestmentFields
           investment={investment}
@@ -665,7 +681,7 @@ function AddAvailableInvestmentForm(h: Handle<{ accounts: Account[]; exposures: 
   return () => (
     <div mix={innerCard}>
       <h3 mix={subheading}>Add available investment</h3>
-      <form method="POST" action="/app" mix={form}>
+      <form method="POST" mix={form}>
         <input type="hidden" name="intent" value="add-available-investment" />
         <AvailableInvestmentFields accounts={h.props.accounts} exposures={h.props.exposures} />
         <button mix={button({})}>Add investment</button>
@@ -758,7 +774,7 @@ function TargetSection(
           {h.props.total.toFixed(1)}%
         </strong>
       </div>
-      <form method="POST" action="/app" mix={form}>
+      <form method="POST" mix={form}>
         <label>
           Target name
           <input name="targetName" defaultValue={h.props.targetName} required />
@@ -838,7 +854,7 @@ function TargetSection(
           <span>Explicit small-cap value: {summary.smallValue.toFixed(1)}%</span>
         </div>
       ) : null}
-      <form method="POST" action="/app" mix={inlineForm}>
+      <form method="POST" mix={inlineForm}>
         <input type="hidden" name="intent" value="add-exposure" />
         <label>
           Exposure name
@@ -867,7 +883,7 @@ function ComparisonSection(
           title="Portfolio comparison"
           detail="Combined portfolio is primary. Cash stays in the denominator until invested."
         />
-        <form method="POST" action="/app">
+        <form method="POST" action="/app/plan">
           <input type="hidden" name="intent" value="rebalance" />
           <button mix={button({})} disabled={!h.props.canPlan || h.props.total === 0}>
             Rebalance now
@@ -957,7 +973,7 @@ function ContributionSection(h: Handle<{ accounts: Account[]; canPlan: boolean; 
           detail="A contribution needs a destination account and purchasable investments."
         />
       ) : (
-        <form method="POST" action="/app" mix={form}>
+        <form method="POST" mix={form}>
           <input type="hidden" name="intent" value="contribution" />
           <div mix={formGrid}>
             <label>
@@ -1210,37 +1226,32 @@ const metricGrid = css({
   gap: "12px",
   marginTop: "32px",
 });
-const progressGrid = css({
-  display: "grid",
-  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-  gap: "8px",
-  marginTop: "28px",
-  maxWidth: "820px",
-  "@media (max-width: 720px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" },
-});
-const progressStep = css({
+const tabNav = css({
   display: "flex",
-  alignItems: "center",
   gap: "8px",
-  padding: "10px 12px",
+  overflowX: "auto",
+  padding: "6px",
+  marginTop: "28px",
   border: "1px solid #315244",
-  borderRadius: "12px",
-  background: "#183127",
-  color: "#d4e1d8",
-  fontSize: "13px",
-  fontWeight: 650,
+  borderRadius: "14px",
+  background: "#10271e",
 });
-const progressNumber = css({
-  display: "grid",
-  placeItems: "center",
-  width: "22px",
-  height: "22px",
-  flex: "0 0 22px",
-  borderRadius: "50%",
+const tabLink = css({
+  flex: "1 0 auto",
+  color: "#b5c8bc",
+  textDecoration: "none",
+  textAlign: "center",
+  padding: "11px 16px",
+  borderRadius: "9px",
+  fontWeight: 700,
+  fontSize: "14px",
+  whiteSpace: "nowrap",
+  ":hover": { color: "#f4f7f2", background: "#244536" },
+});
+const activeTabLink = css({
+  color: "#102018",
   background: "#b8e986",
-  color: "#10251d",
-  fontSize: "12px",
-  fontWeight: 800,
+  ":hover": { color: "#102018", background: "#b8e986" },
 });
 const metric = css({
   border: "1px solid #315244",
