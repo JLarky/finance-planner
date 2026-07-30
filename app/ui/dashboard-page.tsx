@@ -332,70 +332,72 @@ function AccountsSection(
 function AccountEditor(
   h: Handle<{ account: Account; holdingCount: number; invested: number; formAction: string }>,
 ) {
-  const account = h.props.account;
-  return () => (
-    <details mix={editorCard}>
-      <summary mix={summaryRow}>
-        <span>
-          <strong>{account.name}</strong>
-          <small>
-            {accountLabel(account.type)} · {h.props.holdingCount} holding
-            {h.props.holdingCount === 1 ? "" : "s"}
-          </small>
-        </span>
-        <span mix={summaryValue}>{money(h.props.invested + account.cash)}</span>
-      </summary>
-      <form method="POST" action={h.props.formAction} mix={form} data-account-form>
-        <input type="hidden" name="accountId" value={account.id} />
-        <div mix={formGrid}>
-          <label>
-            Account name
-            <input name="name" required defaultValue={account.name} />
-          </label>
-          <label>
-            Account type
-            <AccountTypeSelect value={account.type} />
-          </label>
-          <label>
-            Uninvested cash
-            <input name="cash" type="number" min="0" step="0.01" defaultValue={account.cash} />
-          </label>
-        </div>
-        <div mix={checkGrid}>
-          <Check name="allowPurchases" label="Allow purchases" checked={account.allowPurchases} />
-          <Check name="allowSales" label="Allow sales" checked={account.allowSales} />
-          <Check
-            name="expectContributions"
-            label="Contributions expected"
-            checked={account.expectContributions}
-          />
-          <label mix={check} data-taxable-sales hidden={!isTaxableAccount(account)}>
-            <input
-              name="allowTaxableSales"
-              type="checkbox"
-              defaultChecked={account.allowTaxableSales}
-            />{" "}
-            Taxable sales allowed
-          </label>
-        </div>
-        <div mix={buttonRow}>
-          <button type="submit" name="intent" value="update-account" mix={button({})}>
-            Save account
-          </button>
-          <button
-            type="submit"
-            name="intent"
-            value="remove-account"
-            mix={dangerButton}
-            disabled={h.props.holdingCount > 0}
-            title={h.props.holdingCount > 0 ? "Remove holdings first" : "Remove account"}
-          >
-            Remove
-          </button>
-        </div>
-      </form>
-    </details>
-  );
+  return () => {
+    const account = h.props.account;
+    return (
+      <details mix={editorCard}>
+        <summary mix={summaryRow}>
+          <span>
+            <strong>{account.name}</strong>
+            <small>
+              {accountLabel(account.type)} · {h.props.holdingCount} holding
+              {h.props.holdingCount === 1 ? "" : "s"}
+            </small>
+          </span>
+          <span mix={summaryValue}>{money(h.props.invested + account.cash)}</span>
+        </summary>
+        <form method="POST" action={h.props.formAction} mix={form} data-account-form>
+          <input type="hidden" name="accountId" value={account.id} />
+          <div mix={formGrid}>
+            <label>
+              Account name
+              <input name="name" required defaultValue={account.name} />
+            </label>
+            <label>
+              Account type
+              <AccountTypeSelect value={account.type} />
+            </label>
+            <label>
+              Uninvested cash
+              <input name="cash" type="number" min="0" step="0.01" defaultValue={account.cash} />
+            </label>
+          </div>
+          <div mix={checkGrid}>
+            <Check name="allowPurchases" label="Allow purchases" checked={account.allowPurchases} />
+            <Check name="allowSales" label="Allow sales" checked={account.allowSales} />
+            <Check
+              name="expectContributions"
+              label="Contributions expected"
+              checked={account.expectContributions}
+            />
+            <label mix={check} data-taxable-sales hidden={!isTaxableAccount(account)}>
+              <input
+                name="allowTaxableSales"
+                type="checkbox"
+                defaultChecked={account.allowTaxableSales}
+              />{" "}
+              Taxable sales allowed
+            </label>
+          </div>
+          <div mix={buttonRow}>
+            <button type="submit" name="intent" value="update-account" mix={button({})}>
+              Save account
+            </button>
+            <button
+              type="submit"
+              name="intent"
+              value="remove-account"
+              mix={dangerButton}
+              disabled={h.props.holdingCount > 0}
+              title={h.props.holdingCount > 0 ? "Remove holdings first" : "Remove account"}
+            >
+              Remove
+            </button>
+          </div>
+        </form>
+      </details>
+    );
+  };
 }
 
 function AddAccountForm(h: Handle<{ formAction: string }>) {
