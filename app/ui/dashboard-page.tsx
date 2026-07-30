@@ -54,6 +54,7 @@ export function DashboardPage(
     validTargets && hasAccounts && (hasHoldings || portfolio.availableInvestments.length > 0);
   const accountName = new Map(portfolio.accounts.map((account) => [account.id, account.name]));
   const tab = h.props.tab;
+  const formAction = `/app/${tab}`;
   return () => (
     <Document title="Your plan · Finance Planner">
       <main mix={shell}>
@@ -96,13 +97,18 @@ export function DashboardPage(
           </div>
 
           {tab === "accounts" ? (
-            <AccountsSection accounts={portfolio.accounts} holdings={portfolio.holdings} />
+            <AccountsSection
+              accounts={portfolio.accounts}
+              holdings={portfolio.holdings}
+              formAction={formAction}
+            />
           ) : null}
           {tab === "holdings" ? (
             <HoldingsSection
               accounts={portfolio.accounts}
               holdings={portfolio.holdings}
               exposures={portfolio.exposures}
+              formAction={formAction}
             />
           ) : null}
           {tab === "available" ? (
@@ -110,6 +116,7 @@ export function DashboardPage(
               accounts={portfolio.accounts}
               availableInvestments={portfolio.availableInvestments}
               exposures={portfolio.exposures}
+              formAction={formAction}
             />
           ) : null}
           {tab === "target" ? (
@@ -119,6 +126,7 @@ export function DashboardPage(
               availableInvestments={portfolio.availableInvestments}
               total={targetTotal(portfolio)}
               targetName={portfolio.targetName}
+              formAction={formAction}
             />
           ) : null}
           {tab === "compare" ? (
@@ -132,13 +140,18 @@ export function DashboardPage(
           ) : null}
           {tab === "plan" ? (
             <>
-              <ContributionSection accounts={portfolio.accounts} canPlan={canPlan} total={total} />
+              <ContributionSection
+                accounts={portfolio.accounts}
+                canPlan={canPlan}
+                total={total}
+                formAction={formAction}
+              />
               {h.props.plan ? <PlanResult plan={h.props.plan} accountName={accountName} /> : null}
               <TsvExport
                 content={portfolioTsv(portfolio)}
                 jsonContent={JSON.stringify(portfolio, null, 2)}
               />
-              <ImportSection result={h.props.importResult} />
+              <ImportSection result={h.props.importResult} formAction={formAction} />
             </>
           ) : null}
         </section>
@@ -147,7 +160,7 @@ export function DashboardPage(
   );
 }
 
-function ImportSection(h: Handle<{ result?: ImportResult }>) {
+function ImportSection(h: Handle<{ result?: ImportResult; formAction: string }>) {
   const result = h.props.result;
   return () => (
     <section mix={panel} data-import-section>
@@ -198,7 +211,7 @@ function ImportSection(h: Handle<{ result?: ImportResult }>) {
           ) : (
             <p mix={css(muted)}>No changes detected.</p>
           )}
-          <form method="POST">
+          <form method="POST" action={h.props.formAction}>
             <input type="hidden" name="intent" value="confirm-import" />
             <textarea name="importData" hidden defaultValue={result.source} />
             <button type="submit" mix={button({})}>
@@ -207,7 +220,7 @@ function ImportSection(h: Handle<{ result?: ImportResult }>) {
           </form>
         </div>
       ) : null}
-      <form method="POST" mix={form}>
+      <form method="POST" action={h.props.formAction} mix={form}>
         <input type="hidden" name="intent" value="preview-import" />
         <label>
           JSON or tab-separated data
@@ -275,7 +288,9 @@ function EmptyState(h: Handle<{ title: string; detail: string }>) {
   );
 }
 
-function AccountsSection(h: Handle<{ accounts: Account[]; holdings: Holding[] }>) {
+function AccountsSection(
+  h: Handle<{ accounts: Account[]; holdings: Holding[]; formAction: string }>,
+) {
   return () => (
     <section mix={panel}>
       <SectionHeading
@@ -302,18 +317,21 @@ function AccountsSection(h: Handle<{ accounts: Account[]; holdings: Holding[] }>
                   invested={h.props.holdings
                     .filter((holding) => holding.accountId === account.id)
                     .reduce((sum, holding) => sum + holding.value, 0)}
+                  formAction={h.props.formAction}
                 />
               ))}
             </div>
           )}
         </div>
-        <AddAccountForm />
+        <AddAccountForm formAction={h.props.formAction} />
       </div>
     </section>
   );
 }
 
-function AccountEditor(h: Handle<{ account: Account; holdingCount: number; invested: number }>) {
+function AccountEditor(
+  h: Handle<{ account: Account; holdingCount: number; invested: number; formAction: string }>,
+) {
   const account = h.props.account;
   return () => (
     <details mix={editorCard}>
@@ -327,7 +345,7 @@ function AccountEditor(h: Handle<{ account: Account; holdingCount: number; inves
         </span>
         <span mix={summaryValue}>{money(h.props.invested + account.cash)}</span>
       </summary>
-      <form method="POST" mix={form} data-account-form>
+      <form method="POST" action={h.props.formAction} mix={form} data-account-form>
         <input type="hidden" name="accountId" value={account.id} />
         <div mix={formGrid}>
           <label>
@@ -380,11 +398,11 @@ function AccountEditor(h: Handle<{ account: Account; holdingCount: number; inves
   );
 }
 
-function AddAccountForm() {
+function AddAccountForm(h: Handle<{ formAction: string }>) {
   return () => (
     <div mix={innerCard}>
       <h3 mix={subheading}>Add account</h3>
-      <form method="POST" mix={form} data-account-form>
+      <form method="POST" action={h.props.formAction} mix={form} data-account-form>
         <input type="hidden" name="intent" value="add-account" />
         <label>
           Account name
@@ -438,7 +456,12 @@ function AccountTypeSelect(h: Handle<{ value: Account["type"] }>) {
 }
 
 function HoldingsSection(
-  h: Handle<{ accounts: Account[]; holdings: Holding[]; exposures: Exposure[] }>,
+  h: Handle<{
+    accounts: Account[];
+    holdings: Holding[];
+    exposures: Exposure[];
+    formAction: string;
+  }>,
 ) {
   return () => (
     <section mix={panel}>
@@ -465,12 +488,17 @@ function HoldingsSection(
                     holding={holding}
                     accounts={h.props.accounts}
                     exposures={h.props.exposures}
+                    formAction={h.props.formAction}
                   />
                 ))}
               </div>
             )}
           </div>
-          <AddHoldingForm accounts={h.props.accounts} exposures={h.props.exposures} />
+          <AddHoldingForm
+            accounts={h.props.accounts}
+            exposures={h.props.exposures}
+            formAction={h.props.formAction}
+          />
         </div>
       )}
     </section>
@@ -478,7 +506,7 @@ function HoldingsSection(
 }
 
 function HoldingEditor(
-  h: Handle<{ holding: Holding; accounts: Account[]; exposures: Exposure[] }>,
+  h: Handle<{ holding: Holding; accounts: Account[]; exposures: Exposure[]; formAction: string }>,
 ) {
   const holding = h.props.holding;
   const account = h.props.accounts.find((item) => item.id === holding.accountId);
@@ -494,7 +522,7 @@ function HoldingEditor(
         </span>
         <span mix={summaryValue}>{money(holding.value)}</span>
       </summary>
-      <form method="POST" mix={form}>
+      <form method="POST" action={h.props.formAction} mix={form}>
         <input type="hidden" name="holdingId" value={holding.id} />
         <HoldingFields
           holding={holding}
@@ -514,11 +542,13 @@ function HoldingEditor(
   );
 }
 
-function AddHoldingForm(h: Handle<{ accounts: Account[]; exposures: Exposure[] }>) {
+function AddHoldingForm(
+  h: Handle<{ accounts: Account[]; exposures: Exposure[]; formAction: string }>,
+) {
   return () => (
     <div mix={innerCard}>
       <h3 mix={subheading}>Add holding</h3>
-      <form method="POST" mix={form}>
+      <form method="POST" action={h.props.formAction} mix={form}>
         <input type="hidden" name="intent" value="add-holding" />
         <HoldingFields accounts={h.props.accounts} exposures={h.props.exposures} />
         <button mix={button({})}>Add holding</button>
@@ -589,6 +619,7 @@ function AvailableInvestmentsSection(
     accounts: Account[];
     availableInvestments: AvailableInvestment[];
     exposures: Exposure[];
+    formAction: string;
   }>,
 ) {
   return () => (
@@ -619,12 +650,17 @@ function AvailableInvestmentsSection(
                     investment={investment}
                     accounts={h.props.accounts}
                     exposures={h.props.exposures}
+                    formAction={h.props.formAction}
                   />
                 ))}
               </div>
             )}
           </div>
-          <AddAvailableInvestmentForm accounts={h.props.accounts} exposures={h.props.exposures} />
+          <AddAvailableInvestmentForm
+            accounts={h.props.accounts}
+            exposures={h.props.exposures}
+            formAction={h.props.formAction}
+          />
         </div>
       )}
     </section>
@@ -636,6 +672,7 @@ function AvailableInvestmentEditor(
     investment: AvailableInvestment;
     accounts: Account[];
     exposures: Exposure[];
+    formAction: string;
   }>,
 ) {
   const investment = h.props.investment;
@@ -652,7 +689,7 @@ function AvailableInvestmentEditor(
           </small>
         </span>
       </summary>
-      <form method="POST" mix={form}>
+      <form method="POST" action={h.props.formAction} mix={form}>
         <input type="hidden" name="availableInvestmentId" value={investment.id} />
         <AvailableInvestmentFields
           investment={investment}
@@ -677,11 +714,13 @@ function AvailableInvestmentEditor(
   );
 }
 
-function AddAvailableInvestmentForm(h: Handle<{ accounts: Account[]; exposures: Exposure[] }>) {
+function AddAvailableInvestmentForm(
+  h: Handle<{ accounts: Account[]; exposures: Exposure[]; formAction: string }>,
+) {
   return () => (
     <div mix={innerCard}>
       <h3 mix={subheading}>Add available investment</h3>
-      <form method="POST" mix={form}>
+      <form method="POST" action={h.props.formAction} mix={form}>
         <input type="hidden" name="intent" value="add-available-investment" />
         <AvailableInvestmentFields accounts={h.props.accounts} exposures={h.props.exposures} />
         <button mix={button({})}>Add investment</button>
@@ -758,6 +797,7 @@ function TargetSection(
     availableInvestments: AvailableInvestment[];
     total: number;
     targetName: string;
+    formAction: string;
   }>,
 ) {
   const summary = targetMixSummary(h.props.exposures);
@@ -774,7 +814,7 @@ function TargetSection(
           {h.props.total.toFixed(1)}%
         </strong>
       </div>
-      <form method="POST" mix={form}>
+      <form method="POST" action={h.props.formAction} mix={form}>
         <label>
           Target name
           <input name="targetName" defaultValue={h.props.targetName} required />
@@ -959,7 +999,9 @@ function TargetPreview(h: Handle<{ exposures: Exposure[] }>) {
   );
 }
 
-function ContributionSection(h: Handle<{ accounts: Account[]; canPlan: boolean; total: number }>) {
+function ContributionSection(
+  h: Handle<{ accounts: Account[]; canPlan: boolean; total: number; formAction: string }>,
+) {
   return () => (
     <section mix={panel}>
       <SectionHeading
@@ -973,7 +1015,7 @@ function ContributionSection(h: Handle<{ accounts: Account[]; canPlan: boolean; 
           detail="A contribution needs a destination account and purchasable investments."
         />
       ) : (
-        <form method="POST" mix={form}>
+        <form method="POST" action={h.props.formAction} mix={form}>
           <input type="hidden" name="intent" value="contribution" />
           <div mix={formGrid}>
             <label>
